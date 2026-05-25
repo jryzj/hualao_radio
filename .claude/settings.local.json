@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx *)",
+      "Read(//h/ai_app/**)",
+      "Bash(mv radioai/CLAUDE.md /tmp/CLAUDE.md)",
+      "Bash(mv radioai/PRD.md /tmp/PRD.md)",
+      "Bash(mv /h/ai_app/radioai/my_omnivoice-tts_api.json /tmp/)",
+      "Bash(mv /tmp/CLAUDE.md /tmp/PRD.md /h/ai_app/radioai/)",
+      "Bash(mv radioai/CLAUDE.md /tmp/)",
+      "Bash(mv radioai/PRD.md /tmp/)"
+    ]
+  }
+}
