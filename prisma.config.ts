@@ -3,12 +3,18 @@
 import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
+// Default to a relative path so a fresh checkout works without a .env
+// file. The path is resolved against process.cwd(), so the server must
+// be started from the project root. Override via DATABASE_URL in .env
+// or the process environment to use an absolute path.
+const DEFAULT_DATABASE_URL = "file:./dev.db";
+
 export default defineConfig({
   schema: "prisma/schema.prisma",
   migrations: {
     path: "prisma/migrations",
   },
   datasource: {
-    url: process.env["DATABASE_URL"],
+    url: process.env["DATABASE_URL"] ?? DEFAULT_DATABASE_URL,
   },
 });
