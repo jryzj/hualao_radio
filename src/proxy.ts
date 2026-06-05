@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 const COOKIE_NAME = "admin_session";
 const PROTECTED_PREFIXES = ["/admin", "/api/admin"];
 
-export function middleware(req: NextRequest) {
+export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // The login route itself and the listener UI are public. Everything
@@ -33,10 +33,10 @@ export function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // The cookie's *presence* is the gate at the middleware layer. The
+  // The cookie's *presence* is the gate at the proxy layer. The
   // server-side route handlers do a full HMAC verify in readAdminCookie
-  // before doing any work — this middleware exists primarily to keep
-  // the unauthenticated request off the route handler at all.
+  // before doing any work — this proxy exists primarily to keep the
+  // unauthenticated request off the route handler at all.
   return NextResponse.next();
 }
 

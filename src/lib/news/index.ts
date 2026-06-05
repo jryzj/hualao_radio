@@ -336,6 +336,18 @@ async function startService(): Promise<void> {
 }
 
 // Auto-start on module load (singleton pattern, like LiveEngine)
-startService().catch((err) => console.error("[NewsService] start failed:", err));
+startService().catch((err) => {
+  console.error("[NewsService] start failed:", err);
+  // The most common cause of a "no such table" error here is a DB that
+  // hasn't had the latest migrations applied. Print a one-liner so the
+  // operator doesn't have to decode the Prisma error to figure out
+  // what to do.
+  const msg = err instanceof Error ? `${err.message} ${err.cause ? JSON.stringify((err.cause as Record<string, unknown>)) : ""}` : String(err);
+  if (/no such table/i.test(msg)) {
+    console.error(
+      "[NewsService] hint: run `npx prisma migrate deploy` on the server — the database is missing one or more migrations.",
+    );
+  }
+});
 
 export const newsService = new NewsService();

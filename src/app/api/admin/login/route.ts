@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   }
   // Issue a signed session id (HMAC of a random nonce, keyed by the
   // admin password). The value is opaque to the client; the server
-  // verifies the HMAC on every admin request via middleware.
+  // verifies the HMAC on every admin request via the proxy.
   const cookieValue = mintAdminCookie();
   const cookieStore = await cookies();
   cookieStore.set(ADMIN_COOKIE_NAME, cookieValue, {

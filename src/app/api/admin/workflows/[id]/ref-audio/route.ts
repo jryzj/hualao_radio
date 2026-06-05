@@ -5,6 +5,14 @@ import path from "path";
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
 
+// Browsers are inconsistent about what MIME they report for audio
+// formats. Chrome 91+ sends `audio/flac` for .flac, but Firefox and
+// older Chrome report `application/octet-stream`. We trust the
+// extension as a fallback — anything audio-shaped under public/ is
+// fair game as long as it isn't an obviously dangerous double-dot
+// name (caught by `cleanName` below).
+const AUDIO_EXTS = new Set([".wav", ".mp3", ".flac", ".m4a", ".ogg", ".oga", ".opus", ".webm", ".aac"]);
+
 // Both POST (delete-old-then-write-new) and DELETE touch files
 // relative to the public/ root using a path that ultimately comes
 // from a DB column. The DB column used to be settable from a raw
@@ -38,8 +46,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "file field is required" }, { status: 400 });
   }
 
-  if (!file.type.startsWith("audio/")) {
-    return NextResponse.json({ error: "file must be audio/*" }, { status: 400 });
+  if (!file.type.startsWith("audio/") && !AUDIO_EXTS.has(path.extname(file.name).toLowerCase())) {
+    return NextResponse.json({ error: "file must be an audio file" }, { status: 400 });
   }
 
   if (file.size > MAX_BYTES) {

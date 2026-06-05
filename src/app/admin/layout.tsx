@@ -12,7 +12,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
       setAuthed(true);
       return;
     }
-    // The server-side middleware has already verified the signed cookie
+    // The server-side proxy has already verified the signed cookie
     // and redirected us here if it was missing. We just kick the user
     // back to login if, for any reason, the cookie is gone.
     const hasCookie = document.cookie.includes("admin_session=");

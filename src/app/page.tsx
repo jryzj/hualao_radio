@@ -144,7 +144,13 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!messageFrontendVisible) return;
-    const ws = new WebSocket(`ws://${window.location.hostname}:8080/messages`);
+    // Match the page's protocol: wss when the page is HTTPS, ws in dev.
+    // Browsers block ws:// connections from HTTPS pages, so this MUST
+    // track window.location.protocol. The WS server (ws-server/index.ts)
+    // listens on :8080 — make sure your reverse proxy / Cloudflare
+    // forwards the WSS upgrade on :443 to :8080 on the origin.
+    const wsScheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const ws = new WebSocket(`${wsScheme}//${window.location.hostname}:8080/messages`);
     msgSocketRef.current = ws;
     ws.onmessage = (e) => {
       if (typeof e.data !== "string") return;
@@ -407,7 +413,11 @@ export default function Home() {
     if (!audioRef.current) return;
     const t = await fetch("/api/config").then(r => r.json()).catch(() => null);
     if (!t) return;
-    const wsUrl = `ws://${window.location.hostname}:8080/audio?themeId=${t.id}`;
+    // Match the page protocol: wss on HTTPS, ws in dev. The WS server
+    // itself is HTTP-only on :8080 — see the comment on the message
+    // socket above for the reverse-proxy / Cloudflare requirement.
+    const wsScheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${wsScheme}//${window.location.hostname}:8080/audio?themeId=${t.id}`;
     const socket = new WebSocket(wsUrl);
     socket.binaryType = "arraybuffer";
     socketRef.current = socket;
