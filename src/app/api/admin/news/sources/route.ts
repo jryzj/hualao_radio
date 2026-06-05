@@ -101,6 +101,21 @@ export async function POST(req: NextRequest) {
     let created = 0;
     let updated = 0;
     for (const feed of result.feeds) {
+      // Apply the same SSRF guard used for the JSON add path. An
+      // attacker who controls a portion of an OPML file (or anyone
+      // able to add a feed in admin) cannot use this to enqueue a
+      // fetch of 169.254.169.254, an RFC1918 host, or any other
+      // internal target.
+      const safety = await assertSafeHttpUrl(feed.xmlUrl);
+      if (!safety.ok) {
+        return NextResponse.json(
+          {
+            error: safety.error,
+            message: `OPML contains a blocked URL: ${feed.xmlUrl}`,
+          },
+          { status: 400 },
+        );
+      }
       const existing = await prisma.rssSource.findUnique({ where: { url: feed.xmlUrl } });
       if (existing) {
         await prisma.rssSource.update({

@@ -1,36 +1,14 @@
 "use client";
-import { ReactNode, useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { ReactNode } from "react";
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [authed, setAuthed] = useState(pathname === "/admin/login");
-
-  useEffect(() => {
-    if (pathname === "/admin/login") {
-      setAuthed(true);
-      return;
-    }
-    // The server-side proxy has already verified the signed cookie
-    // and redirected us here if it was missing. We just kick the user
-    // back to login if, for any reason, the cookie is gone.
-    const hasCookie = document.cookie.includes("admin_session=");
-    if (!hasCookie) {
-      router.push("/admin/login");
-      return;
-    }
-    setAuthed(true);
-  }, [pathname, router]);
-
-  if (!authed) {
-    return (
-      <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center", background: "#0a0a0c" }}>
-        <div style={{ color: "#5a5850", fontSize: 12 }}>加载中...</div>
-      </div>
-    );
-  }
-
+  // Auth is enforced by src/proxy.ts: an unauthenticated request never
+  // reaches the /admin tree at all (it gets redirected to /admin/login
+  // server-side). A previous version of this file tried to double-check
+  // via `document.cookie.includes("admin_session=")`, but the cookie is
+  // httpOnly (see /api/admin/login) and is therefore invisible to
+  // JavaScript — that check always fired and bounced the user straight
+  // back to /admin/login. Just render.
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
       <nav style={{ width: 200, background: "#1a1a20", padding: 20 }}>

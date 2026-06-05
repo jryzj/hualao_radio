@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import crypto from "crypto";
+import { sign, verify } from "@/lib/admin-cookie";
 
 const COOKIE_NAME = "admin_session";
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24;
@@ -8,27 +9,17 @@ function getSecret(): string | null {
   // Same key the login route uses to mint the cookie. The login route
   // fails closed if ADMIN_PASSWORD is unset/short, so the secret is
   // always present whenever anyone has managed to log in.
+  //
+  // Known design coupling (security review 2026-06-06, finding M2):
+  // the admin's plaintext password is also the HMAC secret. A short
+  // or guessable password weakens forgery resistance. The proper fix
+  // is a separate ADMIN_SESSION_SECRET env var (32+ bytes, generated
+  // at deploy time). Not done here because it would invalidate all
+  // existing sessions on first deploy of this change — schedule it
+  // for a maintenance window.
   const pw = process.env.ADMIN_PASSWORD;
   if (!pw || pw.length < 8) return null;
   return pw;
-}
-
-function sign(value: string, secret: string): string {
-  const mac = crypto.createHmac("sha256", secret).update(value).digest("hex");
-  return `${value}.${mac}`;
-}
-
-function verify(signed: string, secret: string): string | null {
-  const idx = signed.lastIndexOf(".");
-  if (idx <= 0) return null;
-  const value = signed.slice(0, idx);
-  const mac = signed.slice(idx + 1);
-  const expected = crypto.createHmac("sha256", secret).update(value).digest("hex");
-  if (mac.length !== expected.length) return null;
-  if (!crypto.timingSafeEqual(Buffer.from(mac, "hex"), Buffer.from(expected, "hex"))) {
-    return null;
-  }
-  return value;
 }
 
 export function mintAdminCookie(): string {

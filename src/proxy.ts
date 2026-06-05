@@ -1,29 +1,66 @@
 import { NextRequest, NextResponse } from "next/server";
+import { verify } from "@/lib/admin-cookie";
 
+// Cookie name matches ADMIN_COOKIE_NAME in src/lib/admin-auth.ts. Both
+// sides read ADMIN_PASSWORD as the HMAC secret.
 const COOKIE_NAME = "admin_session";
-const PROTECTED_PREFIXES = ["/admin", "/api/admin"];
+
+// Path prefixes that require an authenticated admin session. /api/live
+// was previously NOT in this matcher, which meant any internet caller
+// could POST /api/live/start, /api/live/stop, or hit the dev test-*
+// endpoints. It is now gated. Public sub-paths under /api/live are
+// listed in PUBLIC_LIVE_PATHS below.
+const PROTECTED_PREFIXES = ["/admin", "/api/admin", "/api/live"];
+
+// Endpoints that intentionally stay public even though their prefix is
+// in PROTECTED_PREFIXES. Keep this list small and audited — anything
+// added here is callable by anyone on the internet.
+const PUBLIC_LIVE_PATHS = new Set<string>([
+  "/api/live/status",            // GET — returns { running: bool }, info only
+  "/api/live/playback-complete", // POST — fired by the public listener page
+                                  //         when audio finishes playing
+]);
+
+function getSecret(): string | null {
+  const pw = process.env.ADMIN_PASSWORD;
+  if (!pw || pw.length < 8) return null;
+  return pw;
+}
+
+function isAuthed(req: NextRequest): boolean {
+  const secret = getSecret();
+  // Fail closed: if the server is misconfigured (no password) refuse
+  // every admin request rather than letting anyone in.
+  if (!secret) return false;
+  const value = req.cookies.get(COOKIE_NAME)?.value;
+  if (!value) return false;
+  // Real HMAC verify, not just a presence check. Forging a non-empty
+  // cookie is no longer sufficient — the signature has to match the
+  // secret that the login route signs with.
+  return verify(value, secret) !== null;
+}
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // The login route itself and the listener UI are public. Everything
-  // else under /admin and /api/admin requires a valid signed cookie.
+  // The login route itself (UI + API) must always be reachable.
   if (pathname === "/admin/login" || pathname.startsWith("/admin/login/")) {
     return NextResponse.next();
   }
-  // The login API accepts credentials and mints the cookie; no check.
-  if (pathname === "/api/admin/login") {
+  if (pathname === "/api/admin/login" || pathname.startsWith("/api/admin/login/")) {
     return NextResponse.next();
   }
-  // /api/admin/logout (if added later) would also be public.
+
+  if (PUBLIC_LIVE_PATHS.has(pathname)) {
+    return NextResponse.next();
+  }
 
   const needsAuth = PROTECTED_PREFIXES.some(
     (p) => pathname === p || pathname.startsWith(p + "/"),
   );
   if (!needsAuth) return NextResponse.next();
 
-  const hasCookie = !!req.cookies.get(COOKIE_NAME)?.value;
-  if (!hasCookie) {
+  if (!isAuthed(req)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
@@ -33,13 +70,9 @@ export function proxy(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // The cookie's *presence* is the gate at the proxy layer. The
-  // server-side route handlers do a full HMAC verify in readAdminCookie
-  // before doing any work — this proxy exists primarily to keep the
-  // unauthenticated request off the route handler at all.
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/admin/:path*", "/api/admin/:path*", "/api/live/:path*"],
 };

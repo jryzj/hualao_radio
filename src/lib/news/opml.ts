@@ -67,8 +67,15 @@ export function parseOpml(xml: string): ParseResult {
   return { ok: true, feeds };
 }
 
-function collectOutlines(node: unknown, out: ParsedOutline[]): void {
+// Defense against stack-blowing OPML: a maliciously nested <outline>
+// tree would otherwise recurse until we OOM/segfault. The Next.js
+// body-size limit already caps the input, but a tight tree within
+// that limit can still hit thousands of stack frames.
+const MAX_OUTLINE_DEPTH = 32;
+
+function collectOutlines(node: unknown, out: ParsedOutline[], depth: number = 0): void {
   if (!node || typeof node !== "object") return;
+  if (depth > MAX_OUTLINE_DEPTH) return;
   const obj = node as Record<string, unknown>;
   const outline = obj.outline;
   const children: unknown[] = [];
@@ -102,7 +109,7 @@ function collectOutlines(node: unknown, out: ParsedOutline[]): void {
     // Recurse into nested outlines (categories)
     const inner = childObj.outline;
     if (Array.isArray(inner) || (inner && typeof inner === "object")) {
-      collectOutlines(childObj, out);
+      collectOutlines(childObj, out, depth + 1);
     }
   }
 }

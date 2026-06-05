@@ -1,6 +1,16 @@
 // RSS / ATOM feed fetcher
 // Uses rss-parser to handle RSS 2.0, ATOM 1.0, RDF; turndown to convert
 // HTML content to markdown.
+//
+// Known SSRF exposure (security review 2026-06-06, finding M5):
+// `parser.parseURL(url)` opens a fetch from this process to the source
+// URL. The admin/news/sources route validates hostnames at *submission*
+// time, but DNS could rebind between then and the actual fetch. A
+// hard fix would replace rss-parser with a manual fetch that resolves
+// DNS at connect time and rejects private/loopback addresses. Not done
+// here because it requires replacing the parser integration. Mitigated
+// in the meantime by (a) admin-only add path and (b) the IP blocklist
+// applied at submission in api/admin/news/sources.
 
 import Parser from "rss-parser";
 import TurndownService from "turndown";

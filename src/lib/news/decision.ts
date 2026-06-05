@@ -27,6 +27,15 @@ export const DECISION_SYSTEM_PROMPT = `你是直播间的"资讯需求评估员"
 export interface DecisionInput {
   themeName: string;
   themeDescription: string;
+  // NOTE: `recentHistory` and `pendingMessages` are declared but not
+  // fed to the decision LLM in buildDecisionUserPrompt below. This is
+  // deliberate (security review 2026-06-06, finding H3): listener
+  // messages and recent broadcast text are untrusted and a prompt
+  // that includes them lets a listener force the decision LLM to
+  // emit "QUERY: <attacker-controlled URL>", pivoting the system
+  // into a Tavily lookup the attacker chose. If you ever decide to
+  // feed them in, sandbox them in a clearly delimited block and
+  // require the LLM to decide only on the surrounding context.
   recentHistory: string;
   currentTime: string;
   pendingMessages: string;
