@@ -32,7 +32,7 @@ export default function AdminDashboard() {
     });
   }, []);
 
-  const s = {
+  const s: Record<string, React.CSSProperties> = {
     container: { minHeight: "100vh", background: "#0a0a0c", color: "#f0ece4" },
     header: {
       display: "flex", alignItems: "center", justifyContent: "space-between",

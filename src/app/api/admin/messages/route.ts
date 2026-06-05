@@ -4,12 +4,9 @@ import { liveEngine } from "@/lib/live-engine";
 
 async function broadcast(payload: object) {
   try {
-    const res = await fetch("http://localhost:8081/broadcast-message", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) console.error("[broadcast] non-ok:", res.status);
+    await import("@/lib/ws-server").then(m =>
+      m.wsBroadcastMessage(payload as Parameters<typeof m.wsBroadcastMessage>[0]),
+    );
   } catch (e) {
     console.error("[broadcast] error:", e);
   }

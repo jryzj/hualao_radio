@@ -62,7 +62,7 @@ class LiveEngine {
     this.pendingRounds = [];
     this.currentRound = null;
     this.isGeneratingLLM = false;
-    fetch('http://localhost:8081/flush', { method: 'POST' }).catch(() => {});
+    import("@/lib/ws-server").then(m => m.wsFlush()).catch(() => {});
   }
 
   isRunning(): boolean {
@@ -374,7 +374,7 @@ class LiveEngine {
 
       if (text && globalState.liveEngineRunning && !globalState.shouldStop) {
         const PUNCTUATION = /[。？！.!?]/;
-        const sentences = text.split(PUNCTUATION).map(s => s.trim()).filter(Boolean);
+        const sentences = text.split(PUNCTUATION).map((s: string) => s.trim()).filter(Boolean);
         console.log(`[LiveEngine] Generated ${sentences.length} sentences for round ${globalState.liveEngineSegmentCount}`);
 
         if (sentences.length > 0) {

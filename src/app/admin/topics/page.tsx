@@ -135,7 +135,7 @@ export default function ThemesPage() {
     reload();
   }
 
-  const s = {
+  const s: Record<string, React.CSSProperties> = {
     container: { minHeight: "100vh", background: "#0a0a0c", color: "#f0ece4" },
     header: {
       display: "flex", alignItems: "center", justifyContent: "space-between",
@@ -159,23 +159,46 @@ export default function ThemesPage() {
       borderBottom: "1px solid #1a1a22", textTransform: "uppercase",
     },
     td: { padding: "16px 12px", borderBottom: "1px solid #1a1a22", fontSize: 13 },
-    statusBadge: (active: boolean) => ({
+    statusBadgeActive: {
       display: "inline-flex", alignItems: "center", gap: 5,
       padding: "3px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, letterSpacing: 1,
-      background: active ? "rgba(92, 157, 110, 0.1)" : "rgba(90, 88, 80, 0.1)",
-      color: active ? "#5c9d6e" : "#5a5850",
-      border: `1px solid ${active ? "rgba(92, 157, 110, 0.3)" : "rgba(90, 88, 80, 0.3)"}`,
-    }),
-    statusDot: (active: boolean) => ({
+      background: "rgba(92, 157, 110, 0.1)",
+      color: "#5c9d6e",
+      border: "1px solid rgba(92, 157, 110, 0.3)",
+    },
+    statusBadgeInactive: {
+      display: "inline-flex", alignItems: "center", gap: 5,
+      padding: "3px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, letterSpacing: 1,
+      background: "rgba(90, 88, 80, 0.1)",
+      color: "#5a5850",
+      border: "1px solid rgba(90, 88, 80, 0.3)",
+    },
+    statusDotActive: {
       width: 4, height: 4, borderRadius: "50%",
-      background: active ? "#5c9d6e" : "#5a5850",
-    }),
-    actionBtn: (variant: "start" | "stop" | "delete") => ({
+      background: "#5c9d6e",
+    },
+    statusDotInactive: {
+      width: 4, height: 4, borderRadius: "50%",
+      background: "#5a5850",
+    },
+    actionBtnStart: {
       padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4,
       border: "none", cursor: "pointer", marginRight: 6,
-      background: variant === "delete" ? "transparent" : "rgba(232, 168, 76, 0.1)",
-      color: variant === "delete" ? "#d45c5c" : "#e8a84c",
-    }),
+      background: "rgba(232, 168, 76, 0.1)",
+      color: "#e8a84c",
+    },
+    actionBtnStop: {
+      padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4,
+      border: "none", cursor: "pointer", marginRight: 6,
+      background: "rgba(232, 168, 76, 0.1)",
+      color: "#e8a84c",
+    },
+    actionBtnDelete: {
+      padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4,
+      border: "none", cursor: "pointer", marginRight: 6,
+      background: "transparent",
+      color: "#d45c5c",
+    },
     createCard: {
       background: "linear-gradient(145deg, #12121a, #0e0e14)",
       border: "1px solid #2a2a32", borderRadius: 12, padding: 24, marginBottom: 24,
@@ -360,26 +383,26 @@ export default function ThemesPage() {
                   <td style={{ ...s.td, color: "#9a958c" }}>{t.persona?.name || "—"}</td>
                   <td style={{ ...s.td, color: "#9a958c" }}>{t.workflow?.name || "—"}</td>
                   <td style={s.td}>
-                    <span style={s.statusBadge(t.isActive)}>
-                      <span style={s.statusDot(t.isActive)} />
+                    <span style={t.isActive ? s.statusBadgeActive : s.statusBadgeInactive}>
+                      <span style={t.isActive ? s.statusDotActive : s.statusDotInactive} />
                       {t.isActive ? "进行中" : "已停止"}
                     </span>
                   </td>
                   <td style={s.td}>
                     <button
-                      style={s.actionBtn(t.isActive ? "stop" : "start")}
+                      style={t.isActive ? s.actionBtnStop : s.actionBtnStart}
                       onClick={() => toggleActive(t.id, t.isActive)}
                     >
                       {t.isActive ? "停止" : "启动"}
                     </button>
                     <button
-                      style={{ ...s.actionBtn("start"), marginRight: 6 }}
+                      style={{ ...s.actionBtnStart, marginRight: 6 }}
                       onClick={() => startEdit(t)}
                     >
                       编辑
                     </button>
                     <button
-                      style={s.actionBtn("delete")}
+                      style={s.actionBtnDelete}
                       onClick={() => remove(t.id)}
                     >
                       删除

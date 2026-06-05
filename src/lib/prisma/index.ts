@@ -2,16 +2,13 @@ import { PrismaClient } from "@/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
 import "dotenv/config";
 
-import path from "path";
-
 const dbUrl = process.env.DATABASE_URL ?? "file:./dev.db";
-let resolvedUrl = dbUrl;
-if (dbUrl.startsWith("file:")) {
-  const filePath = dbUrl.slice(5);
-  resolvedUrl = `file:${path.resolve(process.cwd(), filePath)}`;
-}
-
-const adapter = new PrismaLibSql({ url: resolvedUrl });
+// NOTE: We pass the URL through to libsql unchanged. libsql accepts
+// `file:relative` and resolves it against the process cwd at connection
+// time, so we don't need a `path.resolve(process.cwd(), ...)` here.
+// Avoiding that call at module load also keeps Turbopack's file
+// tracer from grabbing the whole project tree.
+const adapter = new PrismaLibSql({ url: dbUrl });
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
 export const prisma = globalForPrisma.prisma || new PrismaClient({ adapter } as any);

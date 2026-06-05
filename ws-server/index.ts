@@ -4,16 +4,82 @@ import http from "http";
 const PORT = Number(process.env.WS_PORT ?? 8080);
 const HTTP_PORT = Number(process.env.WS_HTTP_PORT ?? 8081);
 
-const wss = new WebSocketServer({ port: PORT });
+// Shared secret for the HTTP broadcast endpoints. Required for the
+// server to start — if it isn't set we refuse to bind the HTTP port
+// so an accidentally-public deployment can't be hijacked.
+const BROADCAST_TOKEN = process.env.WS_BROADCAST_TOKEN;
+if (!BROADCAST_TOKEN) {
+  console.error(
+    "[WS Server] WS_BROADCAST_TOKEN is not set. Refusing to start the HTTP broadcast API.",
+  );
+  // We still start the WS side so listeners on :8080 can connect, but
+  // the HTTP broadcast functions will all return 503.
+}
+
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
+function checkToken(req: http.IncomingMessage): boolean {
+  if (!BROADCAST_TOKEN) return false;
+  const header = req.headers["authorization"] ?? "";
+  const got = header.toString().startsWith("Bearer ")
+    ? header.toString().slice(7)
+    : (req.headers["x-broadcast-token"] as string | undefined);
+  if (!got) return false;
+  return timingSafeEqual(got, BROADCAST_TOKEN);
+}
+
+// Cap the size of an HTTP body to 16 MB — broadcast audio chunks
+// are far smaller (a few hundred KB at most), and anything bigger is
+// almost certainly abuse.
+const MAX_BODY_BYTES = 16 * 1024 * 1024;
+
+const wss = new WebSocketServer({
+  port: PORT,
+  // Refuse oversized frames at the protocol level so a misbehaving
+  // client can't OOM the server by spamming huge messages.
+  maxPayload: 4 * 1024 * 1024,
+});
 const audioClients = new Set<WebSocket>();
 const messageClients = new Set<WebSocket>();
 
-// HTTP server for internal broadcast commands
+// HTTP server for internal broadcast commands. Bound to loopback only
+// so external hosts can't reach it (defense in depth — the token check
+// below is the primary control).
 const httpServer = http.createServer((req, res) => {
+  if (!BROADCAST_TOKEN) {
+    res.writeHead(503, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "broadcast token not configured" }));
+    return;
+  }
+  if (!checkToken(req)) {
+    res.writeHead(401, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "unauthorized" }));
+    return;
+  }
+
   if (req.method === "POST" && req.url === "/broadcast") {
     let body = "";
-    req.on("data", chunk => { body += chunk; });
+    let size = 0;
+    let aborted = false;
+    req.on("data", chunk => {
+      if (aborted) return;
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        aborted = true;
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "payload too large" }));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on("end", () => {
+      if (aborted) return;
       try {
         const { audio } = JSON.parse(body);
         const buffer = Buffer.from(audio, "base64");
@@ -26,7 +92,7 @@ const httpServer = http.createServer((req, res) => {
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, clients: audioClients.size }));
       } catch {
-        res.writeHead(400);
+        res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "invalid" }));
       }
     });
@@ -41,8 +107,22 @@ const httpServer = http.createServer((req, res) => {
     res.end(JSON.stringify({ ok: true }));
   } else if (req.method === "POST" && req.url === "/broadcast-message") {
     let body = "";
-    req.on("data", chunk => { body += chunk; });
+    let size = 0;
+    let aborted = false;
+    req.on("data", chunk => {
+      if (aborted) return;
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        aborted = true;
+        res.writeHead(413, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "payload too large" }));
+        req.destroy();
+        return;
+      }
+      body += chunk;
+    });
     req.on("end", () => {
+      if (aborted) return;
       try {
         const p = JSON.parse(body);
         if (p.type === "new_message" && p.message) {
@@ -55,24 +135,29 @@ const httpServer = http.createServer((req, res) => {
           console.log(`[HTTP] broadcast-message message_hidden, ${messageClients.size} clients`);
           broadcastMessageHidden(p.id);
         } else {
-          res.writeHead(400);
+          res.writeHead(400, { "Content-Type": "application/json" });
           return res.end(JSON.stringify({ error: "bad payload" }));
         }
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));
       } catch {
-        res.writeHead(400);
+        res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "invalid" }));
       }
     });
   } else {
-    res.writeHead(404);
-    res.end();
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "not found" }));
   }
 });
 
-httpServer.listen(HTTP_PORT, () => {
-  console.log(`[WS Server] WebSocket on ws://localhost:${PORT}, HTTP broadcast on http://localhost:${HTTP_PORT}`);
+// Loopback only. The HTTP API is meant to be hit by the Next.js
+// server on the same host; binding to 0.0.0.0 would expose the
+// broadcast relay to anyone on the LAN.
+httpServer.listen(HTTP_PORT, "127.0.0.1", () => {
+  console.log(
+    `[WS Server] WebSocket on ws://localhost:${PORT}, HTTP broadcast on http://127.0.0.1:${HTTP_PORT} (token required)`,
+  );
 });
 
 wss.on("connection", (ws, req) => {
@@ -82,15 +167,12 @@ wss.on("connection", (ws, req) => {
   if (path === "/audio") {
     audioClients.add(ws);
     ws.on("close", () => audioClients.delete(ws));
-    ws.on("message", (data) => {
-      console.log(`[WS] Audio received from client, size: ${(data as Buffer).length}`);
-      // Broadcast to ALL audio clients including sender
-      for (const client of audioClients) {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(data);
-        }
-      }
-    });
+    // The audio path is server-push only. Clients are not allowed to
+    // send binary frames back to the server for re-broadcast: any
+    // client that does so is treated as a misuse. We deliberately do
+    // not attach a `message` listener that re-broadcasts — the only
+    // way audio reaches listeners is via the authenticated HTTP
+    // /broadcast endpoint from the Next.js process.
   } else if (path === "/messages") {
     console.log(`[WS] /messages client connected, total: ${messageClients.size + 1}`);
     messageClients.add(ws);

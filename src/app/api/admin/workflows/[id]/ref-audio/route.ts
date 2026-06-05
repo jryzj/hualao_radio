@@ -5,6 +5,25 @@ import path from "path";
 
 const MAX_BYTES = 20 * 1024 * 1024; // 20MB
 
+// Both POST (delete-old-then-write-new) and DELETE touch files
+// relative to the public/ root using a path that ultimately comes
+// from a DB column. The DB column used to be settable from a raw
+// PUT body, which let an attacker store e.g. "../../.env". Even
+// though the workflow PUT is now whitelisted, the value may have
+// been written before the fix landed, so we still resolve and
+// check containment on every read.
+const PUBLIC_ROOT = path.resolve(process.cwd(), "public");
+
+function resolveUnderPublic(rel: string): string | null {
+  // Reject NUL bytes, backslashes (we're on POSIX-style paths in
+  // the DB even on Windows since path.posix.join is used), and
+  // anything that doesn't normalize to a descendant of PUBLIC_ROOT.
+  if (!rel || rel.includes("\0")) return null;
+  const abs = path.resolve(PUBLIC_ROOT, rel);
+  if (!abs.startsWith(PUBLIC_ROOT + path.sep) && abs !== PUBLIC_ROOT) return null;
+  return abs;
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -28,17 +47,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const safeName = path.basename(file.name).replace(/[^a-zA-Z0-9._一-龥-]/g, "_");
-  const filename = `${Date.now()}-${safeName}`;
-  const dirAbs = path.join(process.cwd(), "public", "uploads", "ref-audio", id);
+  // Strip leading dots so we can't end up with `..hidden`.
+  const cleanName = safeName.replace(/^\.+/, "");
+  const filename = `${Date.now()}-${cleanName}`;
+  const dirAbs = path.join(PUBLIC_ROOT, "uploads", "ref-audio", id);
   const fileAbs = path.join(dirAbs, filename);
   const relPath = path.posix.join("uploads", "ref-audio", id, filename);
 
   fs.mkdirSync(dirAbs, { recursive: true });
 
-  // Delete old file if any
+  // Delete old file if any — guarded by the containment check so
+  // a tampered DB value can't trick us into unlinking arbitrary
+  // files.
   if (workflow.refAudioPath) {
-    const oldAbs = path.join(process.cwd(), "public", workflow.refAudioPath);
-    try { if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs); } catch { /* ignore */ }
+    const oldAbs = resolveUnderPublic(workflow.refAudioPath);
+    if (oldAbs) {
+      try { if (fs.existsSync(oldAbs)) fs.unlinkSync(oldAbs); } catch { /* ignore */ }
+    }
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -61,8 +86,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   }
 
   if (workflow.refAudioPath) {
-    const abs = path.join(process.cwd(), "public", workflow.refAudioPath);
-    try { if (fs.existsSync(abs)) fs.unlinkSync(abs); } catch { /* ignore */ }
+    const abs = resolveUnderPublic(workflow.refAudioPath);
+    if (abs) {
+      try { if (fs.existsSync(abs)) fs.unlinkSync(abs); } catch { /* ignore */ }
+    }
   }
 
   await prisma.workflow.update({

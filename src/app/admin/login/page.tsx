@@ -22,7 +22,7 @@ export default function AdminLogin() {
     else setError("密码错误，请重试");
   }
 
-  const s = {
+  const s: Record<string, React.CSSProperties> = {
     container: {
       minHeight: "100vh",
       display: "flex",

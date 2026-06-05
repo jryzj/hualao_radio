@@ -1,22 +1,13 @@
-import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
+// This route previously served a hardcoded developer path
+// (C:/Users/jryzj/...) that leaked the developer's username and
+// 404'd on any other machine. It served no production purpose and
+// has been removed.
+//
+// Any client still hitting /api/audio will receive a 410 Gone so
+// the failure is unambiguous. If a real audio-serve endpoint is
+// needed in the future, it should be reimplemented with a
+// configured audio directory and proper auth.
+import { NextResponse } from "next/server";
 
-const AUDIO_FILE = "C:/Users/jryzj/AppData/Local/Temp/radioai-test-audio/found-audio.flac";
-
-export async function GET() {
-  try {
-    if (!fs.existsSync(AUDIO_FILE)) {
-      return NextResponse.json({ error: "Audio not found" }, { status: 404 });
-    }
-    const audioData = fs.readFileSync(AUDIO_FILE);
-    return new NextResponse(audioData, {
-      headers: {
-        "Content-Type": "audio/flac",
-        "Content-Length": audioData.length.toString(),
-      },
-    });
-  } catch {
-    return NextResponse.json({ error: "Failed to read audio" }, { status: 500 });
-  }
-}
+export const GET = () =>
+  NextResponse.json({ error: "removed" }, { status: 410 });

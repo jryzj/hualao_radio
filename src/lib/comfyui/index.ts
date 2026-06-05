@@ -6,7 +6,7 @@ import path from "path";
 // Global state to check if we should stop polling
 const globalState = globalThis as unknown as { shouldStop?: boolean };
 
-function comfyHeaders(token: string) {
+function comfyHeaders(token: string): Record<string, string> {
   return token
     ? { "Content-Type": "application/json", Authorization: `Bearer ${token}` }
     : { "Content-Type": "application/json" };
@@ -42,16 +42,19 @@ async function pollHistory(promptId: string, serverUrl: string, token: string, m
   return null;
 }
 
-// Submit a single sentence TTS, returns promise that resolves when audio is broadcast
+// Submit a single sentence TTS, returns the promptId on success or null on
+// failure. Side effect: on success, polls the history endpoint and broadcasts
+// the resulting audio over WebSocket. The promptId is returned synchronously
+// (after submission) so callers can poll independently if they want.
 export async function submitOmniVoiceJob(
   text: string,
-): Promise<boolean> {
+): Promise<string | null> {
   console.log('[comfyui] submitOmniVoiceJob called with text:', text.substring(0, 30));
   const config = await getComfyUIConfig();
-  if (!config) return false;
+  if (!config) return null;
 
   const sentence = text.trim();
-  if (!sentence) return false;
+  if (!sentence) return null;
 
   const theme = await prisma.theme.findFirst({ where: { isActive: true }, include: { workflow: true } });
   const workflow = theme?.workflow;
@@ -68,7 +71,7 @@ export async function submitOmniVoiceJob(
     workflowJson = JSON.parse(raw);
   } catch (err) {
     console.error('[comfyui] failed to load workflow:', workflowPath, err);
-    return false;
+    return null;
   }
 
   // Clone workflow: 上传本地参考音频到 ComfyUI 的 input/ 目录，拿返回的文件名注入节点 38
@@ -76,7 +79,7 @@ export async function submitOmniVoiceJob(
     const localAbs = path.join(process.cwd(), "public", refAudioPath);
     if (!fs.existsSync(localAbs)) {
       console.error("[comfyui] ref audio file missing:", localAbs);
-      return false;
+      return null;
     }
     try {
       const buffer = fs.readFileSync(localAbs);
@@ -95,7 +98,7 @@ export async function submitOmniVoiceJob(
       });
       if (!uploadRes.ok) {
         console.error("[comfyui] ref audio upload failed:", uploadRes.status, await uploadRes.text().catch(() => ""));
-        return false;
+        return null;
       }
       const uploadData = await uploadRes.json() as { name?: string };
       const comfyFilename = uploadData.name ?? path.basename(localAbs);
@@ -115,7 +118,7 @@ export async function submitOmniVoiceJob(
       }
     } catch (err) {
       console.error("[comfyui] ref audio upload error:", err);
-      return false;
+      return null;
     }
   }
 
@@ -126,6 +129,7 @@ export async function submitOmniVoiceJob(
   inputs["text"] = sentence;
   inputs["speed"] = speed;
 
+  let promptId: string | null = null;
   try {
     const response = await fetch(`${config.serverUrl}/api/prompt`, {
       method: "POST",
@@ -135,12 +139,12 @@ export async function submitOmniVoiceJob(
     const data = await response.json();
     if (!response.ok) {
       console.error(`[comfyui] submit failed: HTTP ${response.status}`, JSON.stringify(data).substring(0, 500));
-      return false;
+      return null;
     }
-    const promptId = data.prompt_id ?? null;
+    promptId = (data.prompt_id as string | undefined) ?? null;
     if (!promptId) {
       console.error("[comfyui] submit response missing prompt_id:", JSON.stringify(data).substring(0, 500));
-      return false;
+      return null;
     }
 
     console.log(`[comfyui] submitted prompt_id: ${promptId}`);
@@ -148,13 +152,13 @@ export async function submitOmniVoiceJob(
     // Poll for completion and broadcast
     const timeoutMs = config.pollTimeoutMs ?? 120000;
     const entry = await pollHistory(promptId, config.serverUrl, config.comfyuiToken, timeoutMs);
-    if (!entry || globalState.shouldStop) return false;
+    if (!entry || globalState.shouldStop) return promptId;
 
     await broadcastAudioNode(entry, config);
-    return true;
+    return promptId;
   } catch (e) {
     console.error('[comfyui] submitOmniVoiceJob error:', e);
-    return false;
+    return promptId;
   }
 }
 
@@ -172,11 +176,7 @@ async function broadcastAudioNode(entry: Record<string, unknown>, config: NonNul
     if (res.ok) {
       const audioBuffer = Buffer.from(await res.arrayBuffer());
       const base64 = audioBuffer.toString('base64');
-      await fetch('http://localhost:8081/broadcast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audio: base64 }),
-      });
+      await import("@/lib/ws-server").then(m => m.wsBroadcast(base64));
       console.log('[comfyui] broadcast sentence, size:', audioBuffer.length);
     }
   } catch (e) {

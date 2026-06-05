@@ -5,16 +5,22 @@ import { useRouter, usePathname } from "next/navigation";
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [authed, setAuthed] = useState(false);
+  const [authed, setAuthed] = useState(pathname === "/admin/login");
 
   useEffect(() => {
     if (pathname === "/admin/login") {
       setAuthed(true);
       return;
     }
-    const cookie = document.cookie.includes("admin_session=1");
-    if (!cookie) router.push("/admin/login");
-    else setAuthed(true);
+    // The server-side middleware has already verified the signed cookie
+    // and redirected us here if it was missing. We just kick the user
+    // back to login if, for any reason, the cookie is gone.
+    const hasCookie = document.cookie.includes("admin_session=");
+    if (!hasCookie) {
+      router.push("/admin/login");
+      return;
+    }
+    setAuthed(true);
   }, [pathname, router]);
 
   if (!authed) {

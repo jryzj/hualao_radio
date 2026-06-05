@@ -9,11 +9,14 @@ export default function ConfigPage() {
     fetch("/api/admin/config").then(r => r.json()).then(d => {
       setData(d);
       setForm({
+        // Secret fields are returned masked as "<set>". Don't populate
+        // them — leaving them empty means "keep the existing value"
+        // when the form is saved.
         apiUrl: d.llm?.apiUrl ?? "",
-        apiKey: d.llm?.apiKey ?? "",
+        apiKey: "",
         modelName: d.llm?.modelName ?? "",
         serverUrl: d.comfyui?.serverUrl ?? "",
-        comfyuiToken: d.comfyui?.comfyuiToken ?? "",
+        comfyuiToken: "",
         webhookUrl: d.comfyui?.webhookUrl ?? "",
         pollTimeoutMs: d.comfyui?.pollTimeoutMs?.toString() ?? "120000",
         moderationPrompt: d.moderationPrompt ?? "",
@@ -51,12 +54,12 @@ export default function ConfigPage() {
       <form onSubmit={save}>
         <h2>LLM 配置</h2>
         <input placeholder="API URL" value={form.apiUrl} onChange={e => setForm({ ...form, apiUrl: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
-        <input placeholder="API Key" value={form.apiKey} onChange={e => setForm({ ...form, apiKey: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
+        <input placeholder={data.llm?.apiKey === "<set>" ? "已设置（留空保留原值）" : "API Key"} value={form.apiKey} onChange={e => setForm({ ...form, apiKey: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
         <input placeholder="模型名称" value={form.modelName} onChange={e => setForm({ ...form, modelName: e.target.value })} style={{ display: "block", width: 400, marginBottom: 16 }} />
 
         <h2>ComfyUI 配置</h2>
         <input placeholder="服务器地址" value={form.serverUrl} onChange={e => setForm({ ...form, serverUrl: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
-        <input placeholder="API Token (Bearer)" value={form.comfyuiToken} onChange={e => setForm({ ...form, comfyuiToken: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
+        <input placeholder={data.comfyui?.comfyuiToken === "<set>" ? "已设置（留空保留原值）" : "API Token (Bearer)"} value={form.comfyuiToken} onChange={e => setForm({ ...form, comfyuiToken: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
         <input placeholder="Webhook 回调地址" value={form.webhookUrl} onChange={e => setForm({ ...form, webhookUrl: e.target.value })} style={{ display: "block", width: 400, marginBottom: 8 }} />
         <input placeholder="TTS 超时时间(毫秒)" value={form.pollTimeoutMs} onChange={e => setForm({ ...form, pollTimeoutMs: e.target.value })} style={{ display: "block", width: 400, marginBottom: 16 }} />
 
