@@ -82,10 +82,10 @@ export default function Home() {
   const submittedIdRef = useRef<string | null>(null);
   const msgSocketRef = useRef<WebSocket | null>(null);
   // Defaults to true so first paint still shows the message UI if the
-  // /api/admin/messages/config fetch hasn't returned yet.
+  // /api/messages/config fetch hasn't returned yet.
   const [messageFrontendVisible, setMessageFrontendVisible] = useState<boolean>(true);
   // Soft default of 50 matches DEFAULT_MESSAGE_CONFIG in src/config. The
-  // /api/admin/messages/config fetch below overwrites it; the WebSocket
+  // /api/messages/config fetch below overwrites it; the WebSocket
   // new_message handler also re-reads via this ref so admin changes
   // take effect for new WS messages without a full reload.
   const [maxVisibleMessages, setMaxVisibleMessages] = useState<number>(50);
@@ -120,7 +120,11 @@ export default function Home() {
         bufferCfgRef.current = { ...DEFAULT_BUFFER_CFG, ...c };
       }
     }).catch(() => {});
-    fetch("/api/admin/messages/config").then(r => r.json()).then(cfg => {
+    // Public read endpoint — see src/app/api/messages/config/route.ts.
+    // The admin-scoped URL was a pre-existing leak that only worked
+    // because the proxy used to accept any non-empty cookie; it now
+    // requires a real session and rejects public listeners.
+    fetch("/api/messages/config").then(r => r.json()).then(cfg => {
       if (cfg && typeof cfg.frontendVisible === "boolean") {
         setMessageFrontendVisible(cfg.frontendVisible);
       }
@@ -233,7 +237,7 @@ export default function Home() {
       }
     };
     const refetch = () => {
-      fetch("/api/admin/messages/config")
+      fetch("/api/messages/config")
         .then(r => r.json())
         .then(apply)
         .catch(() => {});
