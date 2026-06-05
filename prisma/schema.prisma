@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Persona {
+  id        String   @id @default(cuid())
+  name      String
+  prompt    String
+  themes    Theme[]
+  createdAt DateTime @default(now())
+}
+
+model Workflow {
+  id            String   @id @default(cuid())
+  name          String
+  workflowJson  String
+  inputParams   String
+  refAudioPath  String?
+  refText       String?
+  speed         Float   @default(1.0)
+  themes        Theme[]
+  createdAt     DateTime @default(now())
+}
+
+model Theme {
+  id            String   @id @default(cuid())
+  name          String
+  description   String
+  isActive      Boolean  @default(false)
+  prompt        String   @default("")
+  userPrompt    String   @default("请生成下一段直播内容。")
+  audiencePrompt String   @default("")
+  historyRounds Int      @default(5)
+  persona       Persona  @relation(fields: [personaId], references: [id])
+  personaId     String
+  workflow      Workflow @relation(fields: [workflowId], references: [id])
+  workflowId    String
+  createdAt     DateTime @default(now())
+}
+
+model Message {
+  id         String    @id @default(cuid())
+  content    String
+  authorName String    @default("匿名用户")
+  status     String    @default("pending")
+  createdAt  DateTime  @default(now())
+  reviewedAt DateTime?
+  aiReason   String?
+  isVisible  Boolean   @default(true)
+}
+
+model LLMConfig {
+  id        String   @id @default(cuid())
+  apiUrl    String
+  apiKey    String
+  modelName String
+  createdAt DateTime @default(now())
+}
+
+model ComfyUIConfig {
+  id           String   @id @default(cuid())
+  serverUrl    String
+  comfyuiToken String  @default("")
+  webhookUrl   String
+  pollTimeoutMs Int     @default(120000)
+  createdAt    DateTime @default(now())
+}
+
+model ModerationPrompt {
+  id        String   @id @default(cuid())
+  prompt    String
+  updatedAt DateTime @updatedAt
+}
+
+model AudioBufferConfig {
+  id                 String   @id @default(cuid())
+  prebufferSentences Int      @default(3)
+  prebufferSeconds   Int      @default(8)
+  prebufferMode      String   @default("sentences")
+  prebufferGroupSize Int      @default(3)
+  updatedAt          DateTime @updatedAt
+}
+
+model RssSource {
+  id            String    @id @default(cuid())
+  url           String    @unique
+  title         String    @default("")
+  text          String    @default("")
+  type          String    @default("")
+  htmlUrl       String    @default("")
+  description   String    @default("")
+  language      String    @default("")
+  status        String    @default("active")
+  failCount     Int       @default(0)
+  lastFetchedAt DateTime?
+  createdAt     DateTime  @default(now())
+  items         RssItem[]
+}
+
+model RssItem {
+  id          String    @id @default(cuid())
+  sourceId    String
+  source      RssSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  link        String
+  title       String
+  publishedAt DateTime?
+  contentMd   String    @default("")
+  description String    @default("")
+  fetchedAt   DateTime  @default(now())
+
+  @@unique([sourceId, link])
+  @@index([publishedAt])
+  @@index([fetchedAt])
+}
+
+model NewsConfig {
+  id                  String   @id @default(cuid())
+  prefetchIntervalMs  Int      @default(300000)
+  updateIntervalMs    Int      @default(14400000)
+  activeWindowMs      Int      @default(86400000)
+  retentionDays       Int      @default(7)
+  maxConcurrentFetches Int     @default(5)
+  maxNewsItems        Int      @default(3)
+  maxItemChars        Int      @default(2000)
+  maxTotalChars       Int      @default(5000)
+  tavilyApiKey        String   @default("")
+  tavilyTimeRange     String   @default("d")
+  decisionModelName   String   @default("")
+  updatedAt           DateTime @updatedAt
+}
+
+model MessageConfig {
+  id                 String   @id @default(cuid())
+  maxVisibleMessages Int      @default(50)
+  frontendVisible    Boolean  @default(true)
+  scrollSpeedSeconds Int      @default(80)
+  updatedAt          DateTime @updatedAt
+}

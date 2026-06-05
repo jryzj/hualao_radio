@@ -1,0 +1,274 @@
+/* RadioAI — Cyberpunk neon design system */
+
+:root {
+  /* Surfaces */
+  --bg-deep: #050509;
+  --bg-surface: #0d0d18;
+  --bg-elevated: #14142a;
+  --bg-glass: rgba(20, 20, 42, 0.55);
+  --bg-glass-strong: rgba(13, 13, 24, 0.85);
+
+  /* Neon palette */
+  --neon-cyan: #00f0ff;
+  --neon-cyan-dim: #00a8b3;
+  --neon-magenta: #ff00aa;
+  --neon-violet: #8a2bff;
+  --neon-yellow: #f5ff00;
+  --neon-pink: #ff2e88;
+
+  /* State */
+  --on-air-red: #ff2244;
+  --on-air-idle: #ff00aa;
+  --on-air-glow: 0 0 24px rgba(255, 34, 68, 0.55);
+  --idle-glow: 0 0 16px rgba(255, 0, 170, 0.35);
+
+  /* Text */
+  --text-primary: #f0f4ff;
+  --text-secondary: #8a92b2;
+  --text-dim: #4a5170;
+
+  /* Borders */
+  --border: rgba(0, 240, 255, 0.18);
+  --border-strong: rgba(0, 240, 255, 0.4);
+  --border-magenta: rgba(255, 0, 170, 0.3);
+
+  /* Fonts — resolved by browser via <link> in layout. Each slot has a
+     "specific face" first (used when Google Fonts is reachable) followed by
+     platform-native fallbacks that look clean even when the network is
+     blocked. */
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Mono", "Consolas", "Menlo", monospace;
+  --font-body: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+  height: 100%;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  min-height: 100vh;
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  line-height: 1.5;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  position: relative;
+  /* iOS: prevent pull-to-refresh on the body; let inner elements handle it */
+  touch-action: manipulation;
+}
+
+/* Ambient grid background — very subtle */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0, 240, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0, 240, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+  pointer-events: none;
+  z-index: 0;
+  mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+}
+
+/* Scanline overlay */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 3px,
+    rgba(0, 240, 255, 0.012) 3px,
+    rgba(0, 240, 255, 0.012) 4px
+  );
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: screen;
+}
+
+::selection {
+  background: var(--neon-cyan);
+  color: var(--bg-deep);
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-surface); }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--neon-cyan-dim); }
+
+a { color: inherit; text-decoration: none; }
+button {
+  font-family: var(--font-display);
+  cursor: pointer;
+  border: none;
+  outline: none;
+  background: none;
+  color: inherit;
+}
+input, select, textarea {
+  font-family: var(--font-body);
+  outline: none;
+}
+
+/* ====== Keyframes ====== */
+
+@keyframes neon-breathe {
+  0%, 100% { opacity: 0.65; filter: drop-shadow(0 0 4px currentColor); }
+  50%      { opacity: 1;    filter: drop-shadow(0 0 12px currentColor); }
+}
+
+@keyframes on-air-pulse {
+  0%, 100% { box-shadow: 0 0 8px var(--on-air-red), 0 0 16px rgba(255, 34, 68, 0.3); }
+  50%      { box-shadow: 0 0 16px var(--on-air-red), 0 0 32px rgba(255, 34, 68, 0.6); }
+}
+
+@keyframes ring-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes ring-spin-reverse {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+@keyframes ripple {
+  0%   { transform: scale(0.9); opacity: 0.6; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+@keyframes glitch-shift {
+  0%, 100% { transform: translate(0, 0); }
+  20%      { transform: translate(-1px, 1px); }
+  40%      { transform: translate(1px, -1px); }
+  60%      { transform: translate(-1px, -1px); }
+  80%      { transform: translate(1px, 1px); }
+}
+
+@keyframes scan-line {
+  0%   { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
+
+@keyframes wall-scroll {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(-1 * var(--wall-distance, 50%))); }
+}
+
+@keyframes drawer-slide-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-slide-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ====== Utility classes ====== */
+
+.glass-panel {
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.glass-panel-strong {
+  background: var(--bg-glass-strong);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+}
+
+.neon-text {
+  color: var(--neon-cyan);
+  text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+}
+
+.neon-text-magenta {
+  color: var(--neon-magenta);
+  text-shadow: 0 0 8px rgba(255, 0, 170, 0.5);
+}
+
+.mono { font-family: var(--font-mono); }
+.display { font-family: var(--font-display); letter-spacing: 0.06em; }
+
+.text-primary { color: var(--text-primary); }
+.text-secondary { color: var(--text-secondary); }
+.text-dim { color: var(--text-dim); }
+
+.fade-in { animation: fade-in 0.4s var(--ease-out) forwards; }
+.fade-slide-up { animation: fade-slide-up 0.5s var(--ease-out) forwards; }
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Focus ring */
+:focus-visible {
+  outline: 2px solid var(--neon-cyan);
+  outline-offset: 2px;
+}
+
+/* Body lock when drawer is open */
+body.drawer-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ====== Reduced motion ====== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+  body::before, body::after { display: none; }
+}

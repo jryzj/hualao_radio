@@ -16,19 +16,23 @@
 # next.js
 /.next/
 /out/
+/.swc
 
 # production
 /build
 
 # misc
 .DS_Store
+Thumbs.db
 *.pem
 
-# debug
+# debug / logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+*.log
+*.pid
 
 # env files (can opt-in for committing if needed)
 .env*
@@ -39,3 +43,34 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Prisma client output (regenerated from schema)
+/src/generated/prisma
+
+# Local SQLite databases — dev.db at the repo root is the live one used
+# by `prisma`. The src/dev.db copy is a stray. Keep neither in git.
+*.db
+*.sqlite
+*.sqlite3
+/src/dev.db
+
+# uploaded reference audio (admin workflow uploads)
+/public/uploads/
+
+# TTS voice-clone reference samples (proprietary voice data, kept locally)
+/workflows/*.flac
+
+# Internal-only project documents (not for the public repo)
+/PRD.md
+/PRD-live-engine.md
+/omnivoice-tts-ComfyUI.md
+/AGENTS.md
+/CLAUDE.md
+
+# WebSocket manual-test page route
+/src/app/ws-test/
+
+# Claude Code local-only state (per-machine settings, task scratch files)
+/.claude/settings.local.json
+**/settings.local.json
+
