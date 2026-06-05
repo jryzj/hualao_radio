@@ -153,43 +153,77 @@ export default function Home() {
     // track window.location.protocol. The WS server (ws-server/index.ts)
     // listens on :8080 — make sure your reverse proxy / Cloudflare
     // forwards the WSS upgrade on :443 to :8080 on the origin.
+    //
+    // The socket auto-reconnects with exponential backoff on close.
+    // Without this, a transient drop (ws-server restart, network blip,
+    // reverse-proxy idle timeout) leaves the page permanently blind to
+    // new messages until the user manually reloads.
     const wsScheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${wsScheme}//${window.location.hostname}:8080/messages`);
-    msgSocketRef.current = ws;
-    ws.onmessage = (e) => {
-      if (typeof e.data !== "string") return;
-      try {
-        const evt = JSON.parse(e.data);
-        if (evt.type === "new_message" && evt.message) {
-          const m = evt.message as WallMessage;
-          setWallMessages(prev => {
-            if (prev.some(x => x.id === m.id)) return prev;
-            // Respect the admin "前台显示的最多留言数" cap. The list is
-            // chronological (oldest → newest), so on overflow we drop
-            // the oldest entries from the front. The ref is read here
-            // (not state) so the value used is the latest one captured
-            // at handler-attach time when state changes.
-            const limit = maxVisibleMessagesRef.current;
-            const next = [...prev, { id: m.id, content: m.content, authorName: m.authorName, createdAt: m.createdAt }];
-            return next.length > limit ? next.slice(next.length - limit) : next;
-          });
-          if (m.id === submittedIdRef.current) {
-            setSubmissionStatus("idle");
-            submittedIdRef.current = null;
+    let cancelled = false;
+    let ws: WebSocket | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    let backoffMs = 1000;
+    const MAX_BACKOFF_MS = 15_000;
+
+    const connect = () => {
+      if (cancelled) return;
+      ws = new WebSocket(`${wsScheme}//${window.location.hostname}:8080/messages`);
+      msgSocketRef.current = ws;
+      ws.onopen = () => { backoffMs = 1000; };
+      ws.onmessage = (e) => {
+        if (typeof e.data !== "string") return;
+        try {
+          const evt = JSON.parse(e.data);
+          if (evt.type === "new_message" && evt.message) {
+            const m = evt.message as WallMessage;
+            setWallMessages(prev => {
+              if (prev.some(x => x.id === m.id)) return prev;
+              // Respect the admin "前台显示的最多留言数" cap. The list is
+              // chronological (oldest → newest), so on overflow we drop
+              // the oldest entries from the front. The ref is read here
+              // (not state) so the value used is the latest one captured
+              // at handler-attach time when state changes.
+              const limit = maxVisibleMessagesRef.current;
+              const next = [...prev, { id: m.id, content: m.content, authorName: m.authorName, createdAt: m.createdAt }];
+              return next.length > limit ? next.slice(next.length - limit) : next;
+            });
+            if (m.id === submittedIdRef.current) {
+              setSubmissionStatus("idle");
+              submittedIdRef.current = null;
+            }
+          } else if (evt.type === "message_hidden" && typeof evt.id === "string") {
+            setWallMessages(prev => prev.filter(x => x.id !== evt.id));
+          } else if (evt.type === "message_rejected" && typeof evt.id === "string") {
+            setWallMessages(prev => prev.filter(x => x.id !== evt.id));
+            if (evt.id === submittedIdRef.current) {
+              setSubmissionStatus("rejected");
+            }
           }
-        } else if (evt.type === "message_hidden" && typeof evt.id === "string") {
-          setWallMessages(prev => prev.filter(x => x.id !== evt.id));
-        } else if (evt.type === "message_rejected" && typeof evt.id === "string") {
-          setWallMessages(prev => prev.filter(x => x.id !== evt.id));
-          if (evt.id === submittedIdRef.current) {
-            setSubmissionStatus("rejected");
-          }
+        } catch {
+          // ignore malformed
         }
-      } catch {
-        // ignore malformed
-      }
+      };
+      // onerror always precedes onclose in the spec, so we let onclose
+      // own the reconnect logic and leave onerror as a no-op. Adding a
+      // scheduleRetry here would double-fire.
+      ws.onerror = () => {};
+      ws.onclose = () => {
+        msgSocketRef.current = null;
+        if (cancelled) return;
+        retryTimer = setTimeout(() => {
+          backoffMs = Math.min(backoffMs * 2, MAX_BACKOFF_MS);
+          connect();
+        }, backoffMs);
+      };
     };
-    return () => { ws.close(); };
+
+    connect();
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
+    };
   }, [messageFrontendVisible]);
 
   // When the admin changes the cap at runtime, reconcile the in-memory

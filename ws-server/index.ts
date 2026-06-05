@@ -1,3 +1,8 @@
+// tsx doesn't auto-load .env (Next does). This import makes the
+// ws-server read the same .env the Next app reads, so WS_BROADCAST_TOKEN
+// is the same on both sides. dotenv does not overwrite values already
+// present in process.env, so shell exports still win.
+import "dotenv/config";
 import { WebSocketServer, WebSocket } from "ws";
 import http from "http";
 
