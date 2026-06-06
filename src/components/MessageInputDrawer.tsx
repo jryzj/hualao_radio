@@ -150,9 +150,10 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
           maxLength={32}
           aria-label="Your nickname"
         />
-        <div className="flex gap-2">
-          <input
-            className="min-w-0 flex-1 rounded-md border border-border-cyan bg-[rgba(0,0,0,0.4)] px-3.5 py-3 font-body text-base text-text-primary transition-[border-color,box-shadow] duration-200 ease-out-soft placeholder:text-text-dim focus:border-neon-cyan focus:shadow-[0_0_0_3px_rgba(0,240,255,0.15)] focus:outline-none max-xs:px-3 max-xs:py-2.5"
+        <div className="flex items-end gap-2">
+          <textarea
+            rows={5}
+            className="min-w-0 flex-1 resize-y rounded-md border border-border-cyan bg-transparent px-3.5 py-3 text-right font-body text-base text-text-primary transition-[border-color,box-shadow] duration-200 ease-out-soft placeholder:text-text-dim focus:border-neon-cyan focus:shadow-[0_0_0_3px_rgba(0,240,255,0.15)] focus:outline-none max-xs:px-3 max-xs:py-2.5"
             placeholder="transmit your message..."
             value={form.content}
             onChange={e => setForm({ ...form, content: e.target.value })}
