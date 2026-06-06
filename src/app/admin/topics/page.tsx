@@ -135,275 +135,164 @@ export default function ThemesPage() {
     reload();
   }
 
-  const s: Record<string, React.CSSProperties> = {
-    container: { minHeight: "100vh", background: "#0a0a0c", color: "#f0ece4" },
-    header: {
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "16px 20px", borderBottom: "1px solid #1a1a22",
-      flexWrap: "wrap", gap: 12,
-    },
-    title: { fontFamily: "'Oswald', sans-serif", fontSize: 16, fontWeight: 700, letterSpacing: 2 },
-    backLink: { fontSize: 12, color: "#9a958c", textDecoration: "none" },
-    main: { padding: "24px 20px", maxWidth: 1200, margin: "0 auto" },
-    topBar: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, flexWrap: "wrap", gap: 12 },
-    sectionTitle: {
-      fontFamily: "'Oswald', sans-serif", fontSize: 11, fontWeight: 500,
-      letterSpacing: 3, color: "#5a5850", textTransform: "uppercase",
-    },
-    tableWrapper: { overflowX: "auto", margin: "0 -20px", padding: "0 20px" },
-    table: { width: "100%", minWidth: 600, borderCollapse: "collapse" },
-    th: {
-      textAlign: "left", padding: "14px 12px",
-      fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 500,
-      letterSpacing: 2, color: "#5a5850",
-      borderBottom: "1px solid #1a1a22", textTransform: "uppercase",
-    },
-    td: { padding: "16px 12px", borderBottom: "1px solid #1a1a22", fontSize: 13 },
-    statusBadgeActive: {
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "3px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, letterSpacing: 1,
-      background: "rgba(92, 157, 110, 0.1)",
-      color: "#5c9d6e",
-      border: "1px solid rgba(92, 157, 110, 0.3)",
-    },
-    statusBadgeInactive: {
-      display: "inline-flex", alignItems: "center", gap: 5,
-      padding: "3px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600, letterSpacing: 1,
-      background: "rgba(90, 88, 80, 0.1)",
-      color: "#5a5850",
-      border: "1px solid rgba(90, 88, 80, 0.3)",
-    },
-    statusDotActive: {
-      width: 4, height: 4, borderRadius: "50%",
-      background: "#5c9d6e",
-    },
-    statusDotInactive: {
-      width: 4, height: 4, borderRadius: "50%",
-      background: "#5a5850",
-    },
-    actionBtnStart: {
-      padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4,
-      border: "none", cursor: "pointer", marginRight: 6,
-      background: "rgba(232, 168, 76, 0.1)",
-      color: "#e8a84c",
-    },
-    actionBtnStop: {
-      padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4,
-      border: "none", cursor: "pointer", marginRight: 6,
-      background: "rgba(232, 168, 76, 0.1)",
-      color: "#e8a84c",
-    },
-    actionBtnDelete: {
-      padding: "5px 10px", fontSize: 11, fontWeight: 500, borderRadius: 4,
-      border: "none", cursor: "pointer", marginRight: 6,
-      background: "transparent",
-      color: "#d45c5c",
-    },
-    createCard: {
-      background: "linear-gradient(145deg, #12121a, #0e0e14)",
-      border: "1px solid #2a2a32", borderRadius: 12, padding: 24, marginBottom: 24,
-    },
-    formGrid: {
-      display: "grid",
-      gridTemplateColumns: "1fr",
-      gap: 12,
-      marginBottom: 20,
-    },
-    input: {
-      width: "100%", padding: "11px 14px", background: "#1a1a20",
-      border: "1px solid #2a2a32", borderRadius: 6, color: "#f0ece4", fontSize: 13,
-    },
-    select: {
-      width: "100%", padding: "11px 14px", background: "#1a1a20",
-      border: "1px solid #2a2a32", borderRadius: 6, color: "#f0ece4", fontSize: 13,
-    },
-    buttonRow: { display: "flex", gap: 10, justifyContent: "flex-end", flexWrap: "wrap" },
-    cancelBtn: {
-      padding: "9px 18px", background: "transparent", border: "1px solid #2a2a32",
-      borderRadius: 6, color: "#9a958c", fontSize: 12, cursor: "pointer",
-    },
-    submitBtn: {
-      padding: "9px 20px",
-      background: "linear-gradient(145deg, #e8a84c, #c77b4a)",
-      border: "none", borderRadius: 6, color: "#0a0a0c",
-      fontFamily: "'Oswald', sans-serif", fontSize: 12, fontWeight: 600,
-      letterSpacing: 1, cursor: "pointer",
-    },
-    addBtn: {
-      padding: "9px 18px",
-      background: "linear-gradient(145deg, #1a1a20, #222228)",
-      border: "1px solid #2a2a32", borderRadius: 6,
-      color: "#f0ece4", fontSize: 12, cursor: "pointer",
-    },
-  };
+  // Shared form input + select classes — both need the gold focus ring
+  // from the original <style> block, plus the placeholder dim color.
+  const inputClass = "w-full rounded-md border border-[#2a2a32] bg-[#1a1a20] px-3.5 py-2.5 text-[13px] text-[#f0ece4] focus:border-[#e8a84c] focus:outline-none placeholder:text-[#5a5850]";
+  const textareaClass = `${inputClass} h-20 resize-y`;
 
   return (
-    <div style={s.container}>
-      <header style={s.header}>
-        <h1 style={s.title}>直播主题</h1>
-        <a href="/admin" style={s.backLink}>← 返回概览</a>
+    // Tailwind v4 migration: the 18 style={{}} props + 17-line <style>
+    // block are replaced with utility classes. The 640px breakpoint is
+    // expressed as the arbitrary variant [@media(min-width:640px)]: since
+    // the @theme sm is overridden to 480px.
+    <div className="min-h-screen bg-[#0a0a0c] text-[#f0ece4]">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1a1a22] px-5 py-4 [@media(min-width:640px)]:px-8 [@media(min-width:640px)]:py-5">
+        <h1 className="font-display text-base font-bold tracking-[2px]">直播主题</h1>
+        <a href="/admin" className="text-xs text-[#9a958c] no-underline">← 返回概览</a>
       </header>
 
-      <main style={s.main}>
-        <div style={s.topBar}>
-          <h2 style={s.sectionTitle}>全部主题 ({themes.length})</h2>
+      <main className="mx-auto max-w-[1200px] px-5 py-6 [@media(min-width:640px)]:p-8">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="font-display text-[11px] font-medium uppercase tracking-[3px] text-[#5a5850]">
+            全部主题 ({themes.length})
+          </h2>
           {!isCreating && (
-            <button style={s.addBtn} onClick={() => setIsCreating(true)}>+ 新增主题</button>
+            <button onClick={() => setIsCreating(true)} className="cursor-pointer rounded-md border border-[#2a2a32] [background:linear-gradient(145deg,#1a1a20,#222228)] px-[18px] py-2.5 text-xs text-[#f0ece4] transition-opacity hover:opacity-80">
+              + 新增主题
+            </button>
           )}
         </div>
 
         {isCreating && (
-          <div style={s.createCard}>
-            <h3 style={{
-              fontFamily: "'Oswald', sans-serif", fontSize: 14, fontWeight: 500,
-              marginBottom: 20, letterSpacing: 1, color: "#f0ece4",
-            }}>
+          <div className="mb-6 rounded-xl border border-[#2a2a32] [background:linear-gradient(145deg,#12121a,#0e0e14)] p-6">
+            <h3 className="mb-5 font-display text-sm font-medium tracking-[1px] text-[#f0ece4]">
               创建新主题
             </h3>
             <form onSubmit={create}>
-              <div style={s.formGrid as React.CSSProperties}>
-                <input
-                  placeholder="主题名称"
-                  value={form.name}
-                  onChange={e => setForm({ ...form, name: e.target.value })}
-                  required
-                  style={s.input}
-                />
-                <input
-                  placeholder="描述（选填）"
-                  value={form.description}
-                  onChange={e => setForm({ ...form, description: e.target.value })}
-                  style={s.input}
-                />
-                <select
-                  value={form.personaId}
-                  onChange={e => setForm({ ...form, personaId: e.target.value })}
-                  required
-                  style={s.select}
-                >
+              <div className="mb-5 grid grid-cols-1 gap-3 [@media(min-width:640px)]:grid-cols-2">
+                <input className={inputClass} placeholder="主题名称" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required />
+                <input className={inputClass} placeholder="描述（选填）" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+                <select className={inputClass} value={form.personaId} onChange={e => setForm({ ...form, personaId: e.target.value })} required>
                   <option value="">选择人设</option>
                   {personas.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
-                <select
-                  value={form.workflowId}
-                  onChange={e => setForm({ ...form, workflowId: e.target.value })}
-                  required
-                  style={s.select}
-                >
+                <select className={inputClass} value={form.workflowId} onChange={e => setForm({ ...form, workflowId: e.target.value })} required>
                   <option value="">选择工作流</option>
                   {workflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
                 <textarea
+                  className={`${textareaClass} [@media(min-width:640px)]:col-span-2`}
                   placeholder="系统 Prompt（发给 LLM 的指令，可使用 {{name}} {{prompt}} {{theme.name}} {{theme.description}} 等变量）"
                   value={form.prompt}
                   onChange={e => setForm({ ...form, prompt: e.target.value })}
-                  style={{ ...s.input, height: 80, resize: "vertical" } as React.CSSProperties}
                 />
                 <textarea
+                  className={`${textareaClass} [@media(min-width:640px)]:col-span-2`}
                   placeholder="LLM 用户消息模板（每轮发给 LLM 的 user 消息，可使用 {{listenerMessages}} {{listenerAuthors}} 等变量）"
                   value={form.userPrompt}
                   onChange={e => setForm({ ...form, userPrompt: e.target.value })}
-                  style={{ ...s.input, height: 80, resize: "vertical" } as React.CSSProperties}
                 />
                 <textarea
+                  className={`${textareaClass} [@media(min-width:640px)]:col-span-2`}
                   placeholder="有新留言时使用的 Prompt（可使用 {{listenerMessages}} {{listenerAuthors}} 等变量；留空则回退到上面的 userPrompt）"
                   value={form.audiencePrompt}
                   onChange={e => setForm({ ...form, audiencePrompt: e.target.value })}
-                  style={{ ...s.input, height: 80, resize: "vertical" } as React.CSSProperties}
                 />
                 <input
+                  className={inputClass}
                   type="number"
                   placeholder="历史轮数（-1 = 全部）"
                   value={form.historyRounds}
                   onChange={e => setForm({ ...form, historyRounds: Number(e.target.value) })}
-                  style={s.input}
                 />
               </div>
-              <div style={s.buttonRow}>
-                <button type="button" style={s.cancelBtn} onClick={() => setIsCreating(false)}>取消</button>
-                <button type="submit" style={s.submitBtn}>创建主题</button>
+              <div className="flex flex-wrap justify-end gap-2.5">
+                <button type="button" onClick={() => setIsCreating(false)} className="cursor-pointer rounded-md border border-[#2a2a32] bg-transparent px-[18px] py-2.5 text-xs text-[#9a958c] transition-opacity hover:opacity-80">
+                  取消
+                </button>
+                <button type="submit" className="cursor-pointer rounded-md border-0 [background:linear-gradient(145deg,#e8a84c,#c77b4a)] px-5 py-2.5 font-display text-xs font-semibold tracking-[1px] text-[#0a0a0c] transition-opacity hover:opacity-80">
+                  创建主题
+                </button>
               </div>
             </form>
           </div>
         )}
 
         {editingId && (
-          <div style={{
-            position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
-          }}>
-            <div style={{
-              background: "#1a1a20", border: "1px solid #2a2a32", borderRadius: 12,
-              padding: 24, width: 500, maxWidth: "90vw",
-            }}>
-              <h3 style={{ fontFamily: "'Oswald', sans-serif", fontSize: 14, marginBottom: 20, letterSpacing: 1 }}>编辑主题</h3>
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[rgba(0,0,0,0.8)]">
+            <div className="w-[500px] max-w-[90vw] rounded-xl border border-[#2a2a32] bg-[#1a1a20] p-6">
+              <h3 className="mb-5 font-display text-sm tracking-[1px]">编辑主题</h3>
               <form onSubmit={saveEdit}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 20 }}>
-                  <input placeholder="主题名称" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required style={s.input} />
-                  <input placeholder="描述" value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} style={s.input} />
-                  <select value={editForm.personaId} onChange={e => setEditForm({ ...editForm, personaId: e.target.value })} required style={s.select}>
+                <div className="mb-5 flex flex-col gap-3">
+                  <input className={inputClass} placeholder="主题名称" value={editForm.name} onChange={e => setEditForm({ ...editForm, name: e.target.value })} required />
+                  <input className={inputClass} placeholder="描述" value={editForm.description} onChange={e => setEditForm({ ...editForm, description: e.target.value })} />
+                  <select className={inputClass} value={editForm.personaId} onChange={e => setEditForm({ ...editForm, personaId: e.target.value })} required>
                     <option value="">选择人设</option>
                     {personas.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                   </select>
-                  <select value={editForm.workflowId} onChange={e => setEditForm({ ...editForm, workflowId: e.target.value })} required style={s.select}>
+                  <select className={inputClass} value={editForm.workflowId} onChange={e => setEditForm({ ...editForm, workflowId: e.target.value })} required>
                     <option value="">选择工作流</option>
                     {workflows.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                   </select>
-                  <textarea placeholder="系统 Prompt（发给 LLM）" value={editForm.prompt} onChange={e => setEditForm({ ...editForm, prompt: e.target.value })} style={{ ...s.input, height: 80, resize: "vertical" } as React.CSSProperties} />
-                  <textarea placeholder="LLM 用户消息模板（可使用 {{listenerMessages}} 等变量）" value={editForm.userPrompt} onChange={e => setEditForm({ ...editForm, userPrompt: e.target.value })} style={{ ...s.input, height: 80, resize: "vertical" } as React.CSSProperties} />
-                  <textarea placeholder="有新留言时使用的 Prompt（留空回退到 userPrompt）" value={editForm.audiencePrompt} onChange={e => setEditForm({ ...editForm, audiencePrompt: e.target.value })} style={{ ...s.input, height: 80, resize: "vertical" } as React.CSSProperties} />
-                  <input type="number" placeholder="历史轮数（-1 = 全部）" value={editForm.historyRounds} onChange={e => setEditForm({ ...editForm, historyRounds: Number(e.target.value) })} style={s.input} />
+                  <textarea className={textareaClass} placeholder="系统 Prompt（发给 LLM）" value={editForm.prompt} onChange={e => setEditForm({ ...editForm, prompt: e.target.value })} />
+                  <textarea className={textareaClass} placeholder="LLM 用户消息模板（可使用 {{listenerMessages}} 等变量）" value={editForm.userPrompt} onChange={e => setEditForm({ ...editForm, userPrompt: e.target.value })} />
+                  <textarea className={textareaClass} placeholder="有新留言时使用的 Prompt（留空回退到 userPrompt）" value={editForm.audiencePrompt} onChange={e => setEditForm({ ...editForm, audiencePrompt: e.target.value })} />
+                  <input className={inputClass} type="number" placeholder="历史轮数（-1 = 全部）" value={editForm.historyRounds} onChange={e => setEditForm({ ...editForm, historyRounds: Number(e.target.value) })} />
                 </div>
-                <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
-                  <button type="button" style={s.cancelBtn} onClick={() => setEditingId(null)}>取消</button>
-                  <button type="submit" style={s.submitBtn}>保存</button>
+                <div className="flex justify-end gap-2.5">
+                  <button type="button" onClick={() => setEditingId(null)} className="cursor-pointer rounded-md border border-[#2a2a32] bg-transparent px-[18px] py-2.5 text-xs text-[#9a958c] transition-opacity hover:opacity-80">
+                    取消
+                  </button>
+                  <button type="submit" className="cursor-pointer rounded-md border-0 [background:linear-gradient(145deg,#e8a84c,#c77b4a)] px-5 py-2.5 font-display text-xs font-semibold tracking-[1px] text-[#0a0a0c] transition-opacity hover:opacity-80">
+                    保存
+                  </button>
                 </div>
               </form>
             </div>
           </div>
         )}
 
-        <div style={s.tableWrapper}>
-          <table style={s.table}>
+        <div className="-mx-5 overflow-x-auto px-5">
+          <table className="w-full min-w-[600px] border-collapse">
             <thead>
               <tr>
-                <th style={s.th}>名称</th>
-                <th style={s.th}>描述</th>
-                <th style={s.th}>人设</th>
-                <th style={s.th}>工作流</th>
-                <th style={s.th}>状态</th>
-                <th style={s.th}>操作</th>
+                <th className="border-b border-[#1a1a22] px-3 py-3.5 text-left font-display text-[10px] font-medium uppercase tracking-[2px] text-[#5a5850]">名称</th>
+                <th className="border-b border-[#1a1a22] px-3 py-3.5 text-left font-display text-[10px] font-medium uppercase tracking-[2px] text-[#5a5850]">描述</th>
+                <th className="border-b border-[#1a1a22] px-3 py-3.5 text-left font-display text-[10px] font-medium uppercase tracking-[2px] text-[#5a5850]">人设</th>
+                <th className="border-b border-[#1a1a22] px-3 py-3.5 text-left font-display text-[10px] font-medium uppercase tracking-[2px] text-[#5a5850]">工作流</th>
+                <th className="border-b border-[#1a1a22] px-3 py-3.5 text-left font-display text-[10px] font-medium uppercase tracking-[2px] text-[#5a5850]">状态</th>
+                <th className="border-b border-[#1a1a22] px-3 py-3.5 text-left font-display text-[10px] font-medium uppercase tracking-[2px] text-[#5a5850]">操作</th>
               </tr>
             </thead>
             <tbody>
               {themes.map(t => (
                 <tr key={t.id}>
-                  <td style={{ ...s.td, fontWeight: 600, color: "#f0ece4" }}>{t.name}</td>
-                  <td style={{ ...s.td, color: "#9a958c" }}>{t.description || "—"}</td>
-                  <td style={{ ...s.td, color: "#9a958c" }}>{t.persona?.name || "—"}</td>
-                  <td style={{ ...s.td, color: "#9a958c" }}>{t.workflow?.name || "—"}</td>
-                  <td style={s.td}>
-                    <span style={t.isActive ? s.statusBadgeActive : s.statusBadgeInactive}>
-                      <span style={t.isActive ? s.statusDotActive : s.statusDotInactive} />
+                  <td className="border-b border-[#1a1a22] px-3 py-4 text-[13px] font-semibold text-[#f0ece4]">{t.name}</td>
+                  <td className="border-b border-[#1a1a22] px-3 py-4 text-[13px] text-[#9a958c]">{t.description || "—"}</td>
+                  <td className="border-b border-[#1a1a22] px-3 py-4 text-[13px] text-[#9a958c]">{t.persona?.name || "—"}</td>
+                  <td className="border-b border-[#1a1a22] px-3 py-4 text-[13px] text-[#9a958c]">{t.workflow?.name || "—"}</td>
+                  <td className="border-b border-[#1a1a22] px-3 py-4 text-[13px]">
+                    <span className={`inline-flex items-center gap-1.5 rounded px-2 py-[3px] text-[10px] font-semibold tracking-[1px] ${t.isActive ? "border border-[rgba(92,157,110,0.3)] bg-[rgba(92,157,110,0.1)] text-[#5c9d6e]" : "border border-[rgba(90,88,80,0.3)] bg-[rgba(90,88,80,0.1)] text-[#5a5850]"}`}>
+                      <span className={`h-1 w-1 rounded-full ${t.isActive ? "bg-[#5c9d6e]" : "bg-[#5a5850]"}`} />
                       {t.isActive ? "进行中" : "已停止"}
                     </span>
                   </td>
-                  <td style={s.td}>
+                  <td className="border-b border-[#1a1a22] px-3 py-4 text-[13px]">
                     <button
-                      style={t.isActive ? s.actionBtnStop : s.actionBtnStart}
                       onClick={() => toggleActive(t.id, t.isActive)}
+                      className="mr-1.5 cursor-pointer rounded border-0 bg-[rgba(232,168,76,0.1)] px-2.5 py-[5px] text-[11px] font-medium text-[#e8a84c] transition-opacity hover:opacity-80"
                     >
                       {t.isActive ? "停止" : "启动"}
                     </button>
                     <button
-                      style={{ ...s.actionBtnStart, marginRight: 6 }}
                       onClick={() => startEdit(t)}
+                      className="mr-1.5 cursor-pointer rounded border-0 bg-[rgba(232,168,76,0.1)] px-2.5 py-[5px] text-[11px] font-medium text-[#e8a84c] transition-opacity hover:opacity-80"
                     >
                       编辑
                     </button>
                     <button
-                      style={s.actionBtnDelete}
                       onClick={() => remove(t.id)}
+                      className="mr-1.5 cursor-pointer rounded border-0 bg-transparent px-2.5 py-[5px] text-[11px] font-medium text-[#d45c5c] transition-opacity hover:opacity-80"
                     >
                       删除
                     </button>
@@ -412,9 +301,7 @@ export default function ThemesPage() {
               ))}
               {themes.length === 0 && (
                 <tr>
-                  <td colSpan={6} style={{
-                    ...s.td, textAlign: "center", color: "#5a5850", padding: "48px 0"
-                  }}>
+                  <td colSpan={6} className="px-3 py-12 text-center text-[13px] text-[#5a5850]">
                     暂无主题，创建一个开始直播吧
                   </td>
                 </tr>
@@ -423,25 +310,6 @@ export default function ThemesPage() {
           </table>
         </div>
       </main>
-
-      <style>{`
-        input:focus, select:focus {
-          border-color: #e8a84c !important;
-        }
-        input::placeholder { color: #5a5850; }
-        button:hover { opacity: 0.8; }
-        @media (min-width: 640px) {
-          .form-grid {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
-          .header {
-            padding: 20px 32px !important;
-          }
-          .main {
-            padding: 32px !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
