@@ -15,11 +15,10 @@ interface Props {
 // message text + author + time are the only visible elements; everything
 // else is transparent. Closing is via the FAB or the Escape key.
 //
-// Tailwind v4 migration: the panel's outer/positioning styles are now
-// utility classes. The inner-element overrides (.wall-frame, .wall-item,
-// etc.) are intentionally kept as a small scoped <style> block — they
-// target MessageWall's internal classes, which won't be refactored to
-// accept a `variant` prop until Phase 2.2.
+// Tailwind v4 migration: the panel passes `variant="panel"` to
+// MessageWall, which strips all glass-panel chrome and right-aligns the
+// text. The previously-dead inline <style> block (which targeted
+// non-existent .wall-frame / .wall-item / .wall-text classes) is gone.
 export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }: Props) {
   const panelRef = useRef<HTMLElement>(null);
 
@@ -69,80 +68,8 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
       )}
     >
       <div className="flex flex-none flex-col border-0 bg-transparent p-0 shadow-none outline-none [&>*]:w-full">
-        <MessageWall messages={messages} speedSeconds={speedSeconds} height={360} />
+        <MessageWall messages={messages} speedSeconds={speedSeconds} height={250} variant="panel" />
       </div>
-
-      <style>{`
-        /* Inner MessageWall frame: strip all glass-panel chrome. */
-        .wall-panel .wall-frame {
-          background: transparent !important;
-          backdrop-filter: none !important;
-          -webkit-backdrop-filter: none !important;
-          border: none !important;
-          border-radius: 0;
-          height: 360px;
-          min-height: 0;
-          padding: 0;
-          box-shadow: none;
-        }
-        .wall-panel .wall-track {
-          padding: 4px 0;
-          gap: 12px;
-        }
-
-        /* Hide the scroll fade gradients — they are decorative chrome. */
-        .wall-panel .wall-fade { display: none !important; }
-
-        /* Wall items: strip backgrounds, borders, border-left accent, radius.
-           Keep only the text content visible. Text is right-aligned so the
-           feed reads flush against the right rail. */
-        .wall-panel .wall-item {
-          display: block;
-          padding: 4px 0;
-          background: transparent !important;
-          border: none !important;
-          border-left: none !important;
-          border-radius: 0;
-          box-shadow: none;
-          gap: 0;
-          text-align: right;
-        }
-        .wall-panel .wall-item:hover {
-          background: transparent !important;
-          border-color: transparent !important;
-        }
-        /* Hide the avatar — only the message text is shown. */
-        .wall-panel .wall-avatar { display: none; }
-        .wall-panel .wall-body { width: 100%; }
-        .wall-panel .wall-head {
-          margin-bottom: 2px;
-          /* Push author + time to the right edge of the message block. */
-          justify-content: flex-end;
-        }
-        .wall-panel .wall-author {
-          color: var(--neon-cyan);
-          text-shadow: 0 0 6px rgba(0, 240, 255, 0.35);
-        }
-        .wall-panel .wall-time { color: var(--text-dim); }
-        .wall-panel .wall-text {
-          color: var(--text-primary);
-          font-size: 13px;
-          line-height: 1.5;
-          text-align: right;
-        }
-
-        /* Empty state: drop the glass-panel chrome and hide the dot.
-           Text is right-aligned to match the rest of the feed. */
-        .wall-panel .wall-empty {
-          background: transparent !important;
-          border: none !important;
-          backdrop-filter: none !important;
-          -webkit-backdrop-filter: none !important;
-          box-shadow: none;
-          text-align: right;
-        }
-        .wall-panel .wall-empty-dot { display: none; }
-      `}</style>
     </aside>
   );
 }

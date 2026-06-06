@@ -14,6 +14,10 @@ interface Props {
   height?: number;
   speedSeconds?: number; // time for a single message to traverse the frame height
   emptyText?: string;
+  // "default" = glass-panel frame, bordered items, avatar visible, text left-aligned
+  // "panel"  = fully transparent, no borders / no avatar, text right-aligned
+  //           (used by the floating right-rail MessageWallPanel)
+  variant?: "default" | "panel";
 }
 
 // Vertically-scrolling message wall.
@@ -40,7 +44,9 @@ export function MessageWall({
   height,
   speedSeconds = 60,
   emptyText = "no signals yet · waiting for the first transmission",
+  variant = "default",
 }: Props) {
+  const isPanel = variant === "panel";
   const trackRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -86,8 +92,14 @@ export function MessageWall({
 
   if (messages.length === 0) {
     return (
-      <div className="glass-panel flex items-center justify-center gap-2.5 p-6 font-mono text-xs tracking-[0.05em] text-text-dim">
-        <span className="h-1.5 w-1.5 animate-[neon-breathe_1.6s_ease-in-out_infinite] rounded-full bg-neon-cyan [box-shadow:0_0_8px_#00f0ff]" />
+      <div className={cn(
+        "flex items-center justify-center gap-2.5 p-6 font-mono text-xs tracking-[0.05em] text-text-dim",
+        !isPanel && "glass-panel",
+        isPanel && "bg-transparent text-right",
+      )}>
+        {!isPanel && (
+          <span className="h-1.5 w-1.5 animate-[neon-breathe_1.6s_ease-in-out_infinite] rounded-full bg-neon-cyan [box-shadow:0_0_8px_#00f0ff]" />
+        )}
         <span>{emptyText}</span>
       </div>
     );
@@ -98,13 +110,17 @@ export function MessageWall({
   // moves the track upward so the oldest items exit the top while new ones
   // appear at the bottom.
   const ordered = [...messages].reverse();
-  const list = ordered.map(m => <WallItem key={m.id} message={m} />);
+  const list = ordered.map(m => <WallItem key={m.id} message={m} variant={variant} />);
 
   // Reduced motion = static, scrollable list
   if (reduced) {
     return (
       <div
-        className="glass-panel overflow-y-auto p-3"
+        className={cn(
+          "overflow-y-auto p-3",
+          !isPanel && "glass-panel",
+          isPanel && "bg-transparent",
+        )}
         style={height ? { height, maxHeight: "60vh" } : { minHeight: 200 }}
         role="log"
         aria-label="Live audience messages"
@@ -133,7 +149,11 @@ export function MessageWall({
   return (
     <div
       ref={frameRef}
-      className="glass-panel relative min-h-[180px] flex-1 overflow-hidden p-0"
+      className={cn(
+        "relative min-h-[180px] flex-1 overflow-hidden p-0",
+        !isPanel && "glass-panel",
+        isPanel && "bg-transparent shadow-none",
+      )}
       style={{
         ...(height ? { height, maxHeight: "60vh" } : {}),
       }}
@@ -157,25 +177,40 @@ export function MessageWall({
         <div className="flex flex-col [gap:inherit]">{list}</div>
       </div>
 
-      {/* Top + bottom fade gradients so items dissolve into the frame */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-8 [background:linear-gradient(180deg,var(--bg-glass-strong)_0%,transparent_100%)]" />
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-8 [background:linear-gradient(0deg,var(--bg-glass-strong)_0%,transparent_100%)]" />
+      {/* Top + bottom fade gradients so items dissolve into the frame.
+          Hidden in panel mode (transparent, no chrome to fade into). */}
+      {!isPanel && (
+        <>
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-8 [background:linear-gradient(180deg,var(--bg-glass-strong)_0%,transparent_100%)]" />
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-8 [background:linear-gradient(0deg,var(--bg-glass-strong)_0%,transparent_100%)]" />
+        </>
+      )}
     </div>
   );
 }
 
-function WallItem({ message }: { message: WallMessage }) {
+function WallItem({ message, variant = "default" }: { message: WallMessage; variant: "default" | "panel" }) {
   const initial = (message.authorName || "?").trim().charAt(0).toUpperCase();
+  const isPanel = variant === "panel";
   return (
-    <div className="flex gap-2.5 rounded-md border border-border-cyan border-l-2 border-l-neon-cyan bg-[rgba(0,240,255,0.03)] p-2.5 transition-[background,border-color] duration-200 ease-out-soft hover:border-border-cyan-strong hover:bg-[rgba(0,240,255,0.06)]">
-      <span
-        aria-hidden
-        className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-gradient-to-br from-neon-violet to-neon-cyan font-display text-xs font-bold uppercase text-bg-deep [box-shadow:0_0_8px_rgba(0,240,255,0.3)]"
-      >
-        {initial}
-      </span>
+    <div className={cn(
+      "flex gap-2.5 rounded-md p-2.5 transition-[background,border-color] duration-200 ease-out-soft",
+      !isPanel && "border border-border-cyan border-l-2 border-l-neon-cyan bg-[rgba(0,240,255,0.03)] hover:border-border-cyan-strong hover:bg-[rgba(0,240,255,0.06)]",
+      isPanel && "border-0 bg-transparent p-0 text-right hover:bg-transparent",
+    )}>
+      {!isPanel && (
+        <span
+          aria-hidden
+          className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-gradient-to-br from-neon-violet to-neon-cyan font-display text-xs font-bold uppercase text-bg-deep [box-shadow:0_0_8px_rgba(0,240,255,0.3)]"
+        >
+          {initial}
+        </span>
+      )}
       <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-baseline gap-2">
+        <div className={cn(
+          "mb-0.5 flex items-baseline gap-2",
+          isPanel && "justify-end",
+        )}>
           <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-neon-cyan">
             {message.authorName || "anonymous"}
           </span>
@@ -183,7 +218,10 @@ function WallItem({ message }: { message: WallMessage }) {
             {formatTime(message.createdAt)}
           </span>
         </div>
-        <p className="m-0 break-words text-[13px] leading-[1.5] text-text-primary">
+        <p className={cn(
+          "m-0 break-words text-[13px] leading-[1.5] text-text-primary",
+          isPanel && "text-right",
+        )}>
           {message.content}
         </p>
       </div>
