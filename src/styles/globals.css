@@ -1,13 +1,25 @@
 /* RadioAI — Cyberpunk neon design system
  *
- * Phase 0 (Tailwind v4 migration): this file now imports Tailwind v4
- * and exposes the 28 design tokens via @theme so utility classes
- * (text-neon-cyan, bg-bg-glass, font-display, rounded-lg, etc.) work
- * alongside the existing CSS-variable-based rules.
+ * Tailwind v4 (CSS-first config) is the primary style system. The
+ * 28 design tokens + 11 keyframes are exposed via `@theme` so utility
+ * classes (`text-neon-cyan`, `bg-bg-glass`, `font-display`,
+ * `rounded-lg`, `animate-neon-breathe`, etc.) work out of the box.
  *
- * During the migration the legacy :root tokens and utility classes
- * below stay in place so nothing breaks; once the per-component
- * migration commits land we will prune the duplicates in Phase 6.
+ * The legacy `:root` block below is kept for two reasons:
+ *   1. SVG fill/stroke attributes in AudioVisualizer and the inline
+ *      `<style>` blocks in MessageWall / MessageWallPanel still read
+ *      `var(--neon-cyan)`, `var(--bg-glass-strong)`, etc. directly.
+ *      Migrating them to Tailwind arbitrary values would obscure the
+ *      declarative SVG/transition strings.
+ *   2. A few utility classes (`.glass-panel`, `.neon-text`, etc.) are
+ *      referenced by `MessageWall`'s child components and by some
+ *      third-party utility code. They're a tiny legacy surface, not
+ *      worth deleting in favor of breaking the SVG stops.
+ *
+ * The body, scrollbar, focus-ring, and reduced-motion rules below
+ * stay because they're either global (one-off) or target pseudo-elements
+ * (::selection, ::-webkit-scrollbar) that Tailwind utilities can't
+ * reach cleanly.
  */
 
 @import "tailwindcss";
@@ -159,11 +171,14 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ====== Legacy :root (kept during migration for backward compat) ======
+/* ====== Legacy :root (kept for SVG stops + inline <style> blocks) ======
  *
- * Existing component code references these via `var(--neon-cyan)` etc.
- * They will be removed in Phase 6 once the per-component migration
- * commits have replaced every reference with Tailwind utilities.
+ * Tailwind v4's `@theme` block (above) auto-generates `--color-*`
+ * variables. The legacy names below (`--neon-cyan` not `--color-neon-cyan`)
+ * are what the SVG stopColor / stroke attributes and MessageWall's
+ * inline fade gradients still reference. Keeping them in sync with
+ * the @theme values via duplication is cheaper than touching every
+ * SVG stop. Touch both when changing a color.
  */
 :root {
   /* Surfaces */

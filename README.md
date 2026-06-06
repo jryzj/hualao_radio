@@ -77,7 +77,9 @@ RadioAI 是一套「**拟人主播 + 实时广播**」系统：
 ### 4.4 样式与前端
 
 - **零** UI 库、**零** CSS-in-JS、**零** 状态库
-- **原生 CSS** + CSS 自定义属性（design token 在 `src/styles/globals.css:3-52`）
+- **Tailwind v4**（CSS-first `@theme` + `@import "tailwindcss"`），28 个 design token + 11 个 keyframes 集中在 `src/styles/globals.css`
+- 自定义断点：`xs 380px` · `sm 480px`（覆盖默认 640）· `md 768` · `lg 1024` · `xl 1280` · `2xl 1536` · `3xl 1366`
+- 全局工具类（`.glass-panel`、`.neon-text`、`.display` 等）保留在 `globals.css` 中，因为伪元素样式和内联 `<style>` 块（`::selection`、SVG stops、fade gradient、消息墙项覆盖）不容易用工具类表达
 - 字体走 Google Fonts `<link>`（**不用** `next/font`，因为大陆网络下构建时下载会失败）
 - 图标全内联 `<svg>`，无图标库
 - 状态管理：`useState` / `useRef` / `useReducer`，无 Redux/Zustand/Jotai
@@ -407,8 +409,6 @@ radioai/
 │   ├── app/                    # Next.js App Router
 │   │   ├── page.tsx            # 听众首页
 │   │   ├── layout.tsx          # 根布局（fonts、meta、manifest 引用）
-│   │   ├── page.module.css     # 首页 CSS Module
-│   │   ├── globals.css         # ⚠️ 旧脚手架残留，未被引用
 │   │   ├── admin/              # 管理端页面
 │   │   ├── api/                # API 路由
 │   │   │   ├── admin/          # 管理端鉴权 + CRUD
@@ -574,7 +574,6 @@ npx vitest    # 另一套配置（按文件名匹配）
 - **不引入**新依赖请先讨论——整套栈刻意保持极简
 - **PR 前跑** `npm run lint`（项目没用 Prettier，依赖 ESLint `--fix`）
 - **数据库 schema 改动**必须配套生成 migration：`npx prisma migrate dev --name <name>`
-- **不要在 PR 里改** `src/app/globals.css`（脚手架残留文件，未来要删）
 
 ## 十五、License
 

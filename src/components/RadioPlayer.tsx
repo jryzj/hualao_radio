@@ -144,7 +144,7 @@ export function RadioPlayer({
               "landscape:max-h-[500px]:text-[11px]",
             )}
           >
-            <span className="text-text-dim">// </span>
+            <span className="text-text-dim">{"// "}</span>
             {theme ? theme.name : "initializing signal..."}
           </p>
           <p

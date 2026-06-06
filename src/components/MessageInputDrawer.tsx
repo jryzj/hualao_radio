@@ -128,7 +128,7 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
             SEND SIGNAL
           </h2>
           <span className="font-mono text-[10px] tracking-[0.1em] text-text-dim">
-            // audience transmission
+            {"// audience transmission"}
           </span>
         </div>
         <button
