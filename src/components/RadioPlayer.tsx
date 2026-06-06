@@ -1,5 +1,6 @@
 "use client";
 import { AudioVisualizer } from "./AudioVisualizer";
+import { cn } from "@/lib/cn";
 
 interface Theme {
   id: string;
@@ -29,6 +30,17 @@ interface Props {
   onVolumeChange: (v: number) => void;
 }
 
+// Cyberpunk player card. Centerpiece is the audio visualizer surrounded by
+// 4 corner ticks, with an ON-AIR badge, station + theme meta, transport
+// controls (play + volume), and a status row showing WS link / buffer /
+// queue depth.
+//
+// Tailwind v4 migration: the 300-line <style> block is gone. Pseudo-element
+// styles for the volume slider thumb (`::-webkit-slider-thumb` /
+// `::-moz-range-thumb`) and iOS-specific touch overrides
+// (`@supports (-webkit-touch-callout: none)`) stay in a tiny <style>
+// block at the bottom — pseudo-elements are awkward to express in
+// utility classes. Everything else is utility-first.
 export function RadioPlayer({
   theme,
   isPlaying,
@@ -43,60 +55,137 @@ export function RadioPlayer({
 }: Props) {
   const hostName = theme?.persona?.name ?? "AI";
   const stationName = "RADIO AI";
+  const showBuffer = isPlaying && !bufferStatus.ready;
 
   return (
-    <section className="player" aria-label="Radio player">
-      <div className="player-frame">
-        <div className="player-corner tl" />
-        <div className="player-corner tr" />
-        <div className="player-corner bl" />
-        <div className="player-corner br" />
+    <section className="flex items-center justify-center p-4" aria-label="Radio player">
+      <div
+        className={cn(
+          // Base: mobile
+          "relative flex w-full max-w-[560px] flex-col items-center gap-4 rounded-[14px] border border-border-cyan px-6 pt-7 pb-6 backdrop-blur-[12px] [background:radial-gradient(ellipse_at_center_top,rgba(0,240,255,0.06)_0%,transparent_50%),linear-gradient(160deg,rgba(20,20,42,0.6)_0%,rgba(13,13,24,0.4)_100%)]",
+          // xs (≤380)
+          "max-xs:gap-3 max-xs:px-3 max-xs:py-4",
+          // sm (≤480)
+          "max-sm:px-4 max-sm:py-5",
+          // md (≥768)
+          "md:max-w-[640px] md:gap-5 md:px-8 md:pt-8 md:pb-7",
+          // lg (≥1024)
+          "lg:max-w-[580px] lg:gap-5 lg:px-9 lg:pt-9 lg:pb-8",
+          // 3xl (≥1366)
+          "3xl:max-w-[640px] 3xl:gap-6 3xl:px-10 3xl:pt-11 3xl:pb-9",
+          // landscape short
+          "landscape:max-h-[500px]:gap-2 landscape:max-h-[500px]:px-3.5 landscape:max-h-[500px]:py-3",
+          "landscape:max-h-[420px]:gap-1.5 landscape:max-h-[420px]:px-3 landscape:max-h-[420px]:py-2",
+        )}
+      >
+        <div className="absolute top-1.5 left-1.5 h-3.5 w-3.5 border-t-[1.5px] border-l-[1.5px] border-neon-cyan opacity-70" />
+        <div className="absolute top-1.5 right-1.5 h-3.5 w-3.5 border-t-[1.5px] border-r-[1.5px] border-neon-cyan opacity-70" />
+        <div className="absolute bottom-1.5 left-1.5 h-3.5 w-3.5 border-b-[1.5px] border-l-[1.5px] border-neon-cyan opacity-70" />
+        <div className="absolute bottom-1.5 right-1.5 h-3.5 w-3.5 border-b-[1.5px] border-r-[1.5px] border-neon-cyan opacity-70" />
 
         {/* ON AIR badge — color state machine */}
-        <div className={`on-air ${isPlaying ? "playing" : "idle"}`} role="status" aria-live="polite">
-          <span className="on-air-dot" />
-          <span className="on-air-text display">ON AIR</span>
+        <div
+          role="status"
+          aria-live="polite"
+          className={cn(
+            "inline-flex items-center gap-2 rounded-pill text-[11px] font-semibold tracking-[0.25em] transition-[color,box-shadow,background] duration-300 ease-out-soft",
+            // idle vs playing
+            !isPlaying &&
+              "border border-border-magenta bg-[rgba(255,0,170,0.08)] text-on-air-idle animate-[neon-breathe_2s_ease-in-out_infinite]",
+            isPlaying &&
+              "border border-[rgba(255,34,68,0.5)] bg-[rgba(255,34,68,0.12)] text-on-air-red [text-shadow:0_0_8px_rgba(255,34,68,0.6)] animate-[on-air-pulse_0.8s_ease-in-out_infinite]",
+            // md+
+            "md:px-4 md:py-1.5 md:text-xs",
+            // lg+
+            "lg:px-[18px] lg:py-2 lg:text-[13px] lg:tracking-[0.3em]",
+            // landscape short
+            "landscape:max-h-[500px]:px-2.5 landscape:max-h-[500px]:py-[3px] landscape:max-h-[500px]:text-[9px] landscape:max-h-[500px]:tracking-[0.2em]",
+          )}
+        >
+          <span className="h-[7px] w-[7px] rounded-full bg-current [box-shadow:0_0_8px_currentColor]" />
+          <span className="font-display">ON AIR</span>
         </div>
 
         {/* Visualizer ring (centerpiece) */}
-        <div className="visualizer-wrap">
+        <div
+          className={cn(
+            "flex aspect-square w-[clamp(180px,60vw,320px)] items-center justify-center",
+            "max-xs:w-[clamp(160px,70vw,220px)]",
+            "md:w-[clamp(280px,48vw,380px)]",
+            "lg:w-[clamp(300px,30vw,400px)]",
+            "3xl:w-[clamp(340px,28vw,440px)]",
+            "landscape:max-h-[500px]:w-[clamp(120px,30vh,200px)]",
+            "landscape:max-h-[420px]:w-[clamp(100px,25vh,160px)]",
+          )}
+        >
           <AudioVisualizer analyser={analyser} isPlaying={isPlaying} barCount={48} />
         </div>
 
         {/* Station + theme label */}
-        <div className="meta">
-          <h1 className="station display">{stationName}</h1>
-          {theme ? (
-            <p className="theme-name mono">
-              <span className="theme-prefix">// </span>
-              {theme.name}
-            </p>
-          ) : (
-            <p className="theme-name mono">
-              <span className="theme-prefix">// </span>initializing signal...
-            </p>
-          )}
-          <p className="host mono">hosted by {hostName}</p>
+        <div className="flex flex-col items-center gap-1 text-center">
+          <h1
+            className={cn(
+              "m-0 font-bold tracking-[0.18em] text-text-primary [font-size:clamp(28px,6vw,40px)] [text-shadow:0_0_18px_rgba(0,240,255,0.25)]",
+              "max-xs:text-[22px] max-xs:tracking-[0.12em]",
+              "md:[font-size:clamp(36px,5vw,48px)]",
+              "lg:[font-size:clamp(40px,4.5vw,56px)] lg:tracking-[0.22em]",
+              "3xl:[font-size:clamp(44px,4vw,60px)]",
+              "landscape:max-h-[500px]:text-lg landscape:max-h-[500px]:tracking-[0.12em]",
+              "landscape:max-h-[420px]:text-base",
+            )}
+          >
+            {stationName}
+          </h1>
+          <p
+            className={cn(
+              "m-0 font-mono text-[13px] tracking-[0.05em] text-neon-cyan",
+              "md:text-[14px]",
+              "lg:text-[15px]",
+              "landscape:max-h-[500px]:text-[11px]",
+            )}
+          >
+            <span className="text-text-dim">// </span>
+            {theme ? theme.name : "initializing signal..."}
+          </p>
+          <p
+            className={cn(
+              "m-0 font-mono text-[11px] tracking-[0.08em] text-text-secondary",
+              "md:text-xs",
+              "lg:text-[13px]",
+              "landscape:max-h-[500px]:text-[10px]",
+              "landscape:max-h-[420px]:hidden",
+            )}
+          >
+            hosted by {hostName}
+          </p>
         </div>
 
         {/* Transport controls */}
-        <div className="transport">
+        <div className="flex w-full flex-wrap items-center justify-center gap-5">
           <button
-            className={`play-btn display ${isPlaying ? "playing" : "paused"}`}
             onClick={onTogglePlay}
             aria-label={isPlaying ? "Stop playback" : "Start playback"}
+            className={cn(
+              "inline-flex cursor-pointer items-center gap-2.5 rounded-md border-[1.5px] border-neon-cyan bg-[rgba(0,240,255,0.05)] px-7 py-3 text-[13px] font-medium tracking-[0.2em] text-neon-cyan transition-all duration-200 ease-out-soft [box-shadow:0_0_12px_rgba(0,240,255,0.2),inset_0_0_12px_rgba(0,240,255,0.05)] supports-[-webkit-touch-callout:none]:min-h-[44px] hover:-translate-y-px hover:bg-[rgba(0,240,255,0.12)] hover:[box-shadow:0_0_24px_rgba(0,240,255,0.4),inset_0_0_18px_rgba(0,240,255,0.1)]",
+              isPlaying &&
+                "border-on-air-red bg-[rgba(255,34,68,0.08)] text-on-air-red [box-shadow:0_0_12px_rgba(255,34,68,0.3),inset_0_0_12px_rgba(255,34,68,0.05)] hover:bg-[rgba(255,34,68,0.15)] hover:[box-shadow:0_0_24px_rgba(255,34,68,0.5),inset_0_0_18px_rgba(255,34,68,0.1)]",
+              "max-xs:px-5 max-xs:py-2.5 max-xs:text-xs",
+              "md:px-8 md:py-3.5",
+              "lg:px-9 lg:py-3.5 lg:text-sm",
+              "landscape:max-h-[500px]:px-4 landscape:max-h-[500px]:py-2 landscape:max-h-[500px]:text-[11px]",
+            )}
           >
             {isPlaying ? (
               <>
-                <span className="play-icon">
-                  <span className="bar" />
-                  <span className="bar" />
+                <span className="inline-flex items-center gap-0.5">
+                  <span className="inline-block h-3 w-[3px] rounded-sm bg-current" />
+                  <span className="inline-block h-3 w-[3px] rounded-sm bg-current" />
                 </span>
                 <span>STOP</span>
               </>
             ) : (
               <>
-                <span className="play-icon">
+                <span className="inline-flex items-center">
                   <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden>
                     <path d="M2 1 L11 6 L2 11 Z" fill="currentColor" />
                   </svg>
@@ -106,8 +195,15 @@ export function RadioPlayer({
             )}
           </button>
 
-          <div className="volume-group">
-            <span className="volume-icon mono" aria-hidden>VOL</span>
+          <div
+            className={cn(
+              "flex items-center gap-2.5 rounded-pill border border-border-cyan bg-[rgba(0,0,0,0.3)] px-3.5 py-2",
+              "md:gap-3 md:px-4 md:py-2.5",
+              "lg:gap-3.5 lg:px-[18px] lg:py-2.5",
+              "landscape:max-h-[500px]:px-2.5 landscape:max-h-[500px]:py-1",
+            )}
+          >
+            <span className="font-mono text-[9px] tracking-[0.15em] text-text-dim">VOL</span>
             <input
               type="range"
               min="0"
@@ -115,218 +211,62 @@ export function RadioPlayer({
               step="0.01"
               value={volume}
               onChange={e => onVolumeChange(parseFloat(e.target.value))}
-              className="volume-slider"
+              className="volume-slider h-[3px] w-20 cursor-pointer appearance-none rounded-sm bg-bg-elevated outline-none supports-[-webkit-touch-callout:none]:h-1.5 max-sm:w-[60px] md:w-[100px] lg:w-[120px] landscape:max-h-[500px]:w-[60px]"
               aria-label="Volume"
             />
-            <span className="volume-value mono">{Math.round(volume * 100)}</span>
+            <span
+              className={cn(
+                "min-w-6 text-right font-mono text-[10px] text-neon-cyan",
+                "lg:min-w-7 lg:text-xs",
+                "landscape:max-h-[500px]:text-[10px]",
+              )}
+            >
+              {Math.round(volume * 100)}
+            </span>
           </div>
         </div>
 
         {/* Status row */}
-        <div className="status-row mono">
-          <div className="status-item">
-            <span className={`status-dot ${connected ? "ok" : "warn"}`} />
-            <span className="status-label">{connected ? "WS_LINK" : "WS_LINK…"}</span>
+        <div
+          className={cn(
+            "flex flex-wrap items-center justify-center gap-4 font-mono text-[10px] tracking-[0.1em] text-text-dim",
+            "md:gap-[18px] md:text-[11px]",
+            "lg:gap-5 lg:text-xs",
+            "landscape:max-h-[500px]:gap-2.5 landscape:max-h-[500px]:text-[9px]",
+          )}
+        >
+          <div className="inline-flex items-center gap-1.5">
+            <span
+              className={cn(
+                "h-[5px] w-[5px] rounded-full",
+                connected
+                  ? "bg-on-air-red [box-shadow:0_0_4px_var(--on-air-red)] animate-[neon-breathe_1.4s_ease-in-out_infinite]"
+                  : "bg-neon-yellow [box-shadow:0_0_4px_var(--neon-yellow)]",
+              )}
+            />
+            <span className="text-text-dim">{connected ? "WS_LINK" : "WS_LINK…"}</span>
           </div>
-          {isPlaying && !bufferStatus.ready && (
-            <div className="status-item buffer">
-              <span className="status-label">BUFFER</span>
-              <span className="status-value">
+          {showBuffer && (
+            <div className="inline-flex items-center gap-1.5">
+              <span className="text-text-dim">BUFFER</span>
+              <span className="text-neon-yellow">
                 {bufferStatus.sentences}{prebufferModeLabel}/{bufferStatus.seconds.toFixed(1)}s
-                <span className="status-dim"> · need {bufferStatus.needed}</span>
+                <span className="text-text-dim"> · need {bufferStatus.needed}</span>
               </span>
             </div>
           )}
           {queueLength > 0 && (
-            <div className="status-item">
-              <span className="status-label">QUEUE</span>
-              <span className="status-value">{queueLength}</span>
+            <div className="inline-flex items-center gap-1.5">
+              <span className="text-text-dim">QUEUE</span>
+              <span className="text-neon-cyan">{queueLength}</span>
             </div>
           )}
         </div>
       </div>
 
       <style>{`
-        .player {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 16px;
-        }
-        .player-frame {
-          position: relative;
-          width: 100%;
-          max-width: 560px;
-          padding: 28px 24px 24px;
-          background:
-            radial-gradient(ellipse at center top, rgba(0, 240, 255, 0.06) 0%, transparent 50%),
-            linear-gradient(160deg, rgba(20, 20, 42, 0.6) 0%, rgba(13, 13, 24, 0.4) 100%);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-lg);
-          backdrop-filter: blur(12px);
-          -webkit-backdrop-filter: blur(12px);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 16px;
-        }
-        .player-corner {
-          position: absolute;
-          width: 14px;
-          height: 14px;
-          border-color: var(--neon-cyan);
-          opacity: 0.7;
-        }
-        .player-corner.tl { top: 6px; left: 6px; border-top: 1.5px solid; border-left: 1.5px solid; }
-        .player-corner.tr { top: 6px; right: 6px; border-top: 1.5px solid; border-right: 1.5px solid; }
-        .player-corner.bl { bottom: 6px; left: 6px; border-bottom: 1.5px solid; border-left: 1.5px solid; }
-        .player-corner.br { bottom: 6px; right: 6px; border-bottom: 1.5px solid; border-right: 1.5px solid; }
-
-        /* ON AIR badge */
-        .on-air {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 5px 14px;
-          border-radius: var(--radius-pill);
-          font-size: 11px;
-          letter-spacing: 0.25em;
-          font-weight: 600;
-          transition: color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out), background 0.3s var(--ease-out);
-        }
-        .on-air.idle {
-          color: var(--on-air-idle);
-          background: rgba(255, 0, 170, 0.08);
-          border: 1px solid var(--border-magenta);
-          animation: neon-breathe 2s ease-in-out infinite;
-        }
-        .on-air.playing {
-          color: var(--on-air-red);
-          background: rgba(255, 34, 68, 0.12);
-          border: 1px solid rgba(255, 34, 68, 0.5);
-          animation: on-air-pulse 0.8s ease-in-out infinite;
-          text-shadow: 0 0 8px rgba(255, 34, 68, 0.6);
-        }
-        .on-air-dot {
-          width: 7px;
-          height: 7px;
-          border-radius: 50%;
-          background: currentColor;
-          box-shadow: 0 0 8px currentColor;
-        }
-
-        .visualizer-wrap {
-          width: clamp(180px, 60vw, 320px);
-          aspect-ratio: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .meta {
-          text-align: center;
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .station {
-          font-size: clamp(28px, 6vw, 40px);
-          font-weight: 700;
-          letter-spacing: 0.18em;
-          color: var(--text-primary);
-          text-shadow: 0 0 18px rgba(0, 240, 255, 0.25);
-          margin: 0;
-        }
-        .theme-name {
-          font-size: 13px;
-          color: var(--neon-cyan);
-          margin: 0;
-          letter-spacing: 0.05em;
-        }
-        .theme-prefix { color: var(--text-dim); }
-        .host {
-          font-size: 11px;
-          color: var(--text-secondary);
-          margin: 0;
-          letter-spacing: 0.08em;
-        }
-
-        .transport {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          flex-wrap: wrap;
-          justify-content: center;
-          width: 100%;
-        }
-        .play-btn {
-          display: inline-flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 28px;
-          border: 1.5px solid var(--neon-cyan);
-          background: rgba(0, 240, 255, 0.05);
-          color: var(--neon-cyan);
-          font-size: 13px;
-          font-weight: 500;
-          letter-spacing: 0.2em;
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          transition: all 0.25s var(--ease-out);
-          box-shadow: 0 0 12px rgba(0, 240, 255, 0.2), inset 0 0 12px rgba(0, 240, 255, 0.05);
-        }
-        .play-btn:hover {
-          background: rgba(0, 240, 255, 0.12);
-          box-shadow: 0 0 24px rgba(0, 240, 255, 0.4), inset 0 0 18px rgba(0, 240, 255, 0.1);
-          transform: translateY(-1px);
-        }
-        .play-btn.playing {
-          border-color: var(--on-air-red);
-          color: var(--on-air-red);
-          background: rgba(255, 34, 68, 0.08);
-          box-shadow: 0 0 12px rgba(255, 34, 68, 0.3), inset 0 0 12px rgba(255, 34, 68, 0.05);
-        }
-        .play-btn.playing:hover {
-          background: rgba(255, 34, 68, 0.15);
-          box-shadow: 0 0 24px rgba(255, 34, 68, 0.5), inset 0 0 18px rgba(255, 34, 68, 0.1);
-        }
-        .play-icon {
-          display: inline-flex;
-          align-items: center;
-          gap: 2px;
-        }
-        .play-icon .bar {
-          display: inline-block;
-          width: 3px;
-          height: 12px;
-          background: currentColor;
-          border-radius: 1px;
-        }
-
-        .volume-group {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 8px 14px;
-          background: rgba(0, 0, 0, 0.3);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-pill);
-        }
-        .volume-icon {
-          font-size: 9px;
-          color: var(--text-dim);
-          letter-spacing: 0.15em;
-        }
-        .volume-slider {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 80px;
-          height: 3px;
-          background: var(--bg-elevated);
-          border-radius: 2px;
-          cursor: pointer;
-          outline: none;
-        }
+        /* Volume slider thumb — pseudo-elements are awkward in Tailwind.
+           Kept here as a small scoped block. */
         .volume-slider::-webkit-slider-thumb {
           -webkit-appearance: none;
           width: 12px;
@@ -345,109 +285,14 @@ export function RadioPlayer({
           border: none;
           cursor: pointer;
         }
-        .volume-value {
-          font-size: 10px;
-          color: var(--neon-cyan);
-          min-width: 24px;
-          text-align: right;
-        }
-
-        .status-row {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          flex-wrap: wrap;
-          justify-content: center;
-          font-size: 10px;
-          letter-spacing: 0.1em;
-          color: var(--text-dim);
-        }
-        .status-item {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .status-dot {
-          width: 5px;
-          height: 5px;
-          border-radius: 50%;
-        }
-        .status-dot.ok { background: var(--on-air-red); box-shadow: 0 0 4px var(--on-air-red); animation: neon-breathe 1.4s ease-in-out infinite; }
-        .status-dot.warn { background: var(--neon-yellow); box-shadow: 0 0 4px var(--neon-yellow); }
-        .status-label { color: var(--text-dim); }
-        .status-value { color: var(--neon-cyan); }
-        .status-dim { color: var(--text-dim); }
-        .status-item.buffer .status-value { color: var(--neon-yellow); }
-
-        @media (max-width: 480px) {
-          .player-frame { padding: 20px 16px 16px; }
-          .volume-slider { width: 60px; }
-        }
-        @media (max-width: 380px) {
-          .player-frame { padding: 16px 12px 12px; gap: 12px; }
-          .visualizer-wrap { width: clamp(160px, 70vw, 220px); }
-          .station { font-size: 22px; letter-spacing: 0.12em; }
-          .play-btn { padding: 10px 20px; font-size: 12px; }
-        }
-        /* === Tablet portrait (>= 768px) === */
-        @media (min-width: 768px) {
-          .player-frame { max-width: 640px; padding: 32px 32px 28px; gap: 20px; }
-          .visualizer-wrap { width: clamp(280px, 48vw, 380px); }
-          .station { font-size: clamp(36px, 5vw, 48px); }
-          .theme-name { font-size: 14px; }
-          .host { font-size: 12px; }
-          .on-air { padding: 6px 16px; font-size: 12px; }
-          .play-btn { padding: 13px 32px; font-size: 13px; }
-          .volume-group { padding: 10px 16px; gap: 12px; }
-          .volume-slider { width: 100px; }
-          .volume-value { font-size: 11px; }
-          .status-row { font-size: 11px; gap: 18px; }
-        }
-        /* === Tablet landscape / small desktop (>= 1024px) === */
-        @media (min-width: 1024px) {
-          .player-frame { max-width: 580px; padding: 36px 36px 32px; gap: 22px; }
-          .visualizer-wrap { width: clamp(300px, 30vw, 400px); }
-          .station { font-size: clamp(40px, 4.5vw, 56px); letter-spacing: 0.22em; }
-          .theme-name { font-size: 15px; }
-          .host { font-size: 13px; }
-          .on-air { padding: 7px 18px; font-size: 13px; letter-spacing: 0.3em; }
-          .play-btn { padding: 14px 36px; font-size: 14px; }
-          .volume-group { padding: 11px 18px; gap: 14px; }
-          .volume-slider { width: 120px; }
-          .volume-value { font-size: 12px; min-width: 28px; }
-          .status-row { font-size: 12px; gap: 20px; }
-        }
-        /* === Wide desktop (>= 1366px) === */
-        @media (min-width: 1366px) {
-          .player-frame { max-width: 640px; padding: 44px 40px 36px; gap: 24px; }
-          .visualizer-wrap { width: clamp(340px, 28vw, 440px); }
-          .station { font-size: clamp(44px, 4vw, 60px); }
-        }
-        @media (orientation: landscape) and (max-height: 500px) {
-          .player-frame { padding: 12px 14px; gap: 8px; }
-          .visualizer-wrap { width: clamp(120px, 30vh, 200px); }
-          .station { font-size: 18px; letter-spacing: 0.12em; }
-          .theme-name { font-size: 11px; }
-          .host { font-size: 10px; }
-          .on-air { padding: 3px 10px; font-size: 9px; letter-spacing: 0.2em; }
-          .play-btn { padding: 8px 16px; font-size: 11px; }
-          .volume-group { padding: 4px 10px; }
-          .volume-slider { width: 60px; }
-          .status-row { gap: 10px; font-size: 9px; }
-        }
-        @media (orientation: landscape) and (max-height: 420px) {
-          .player-frame { padding: 8px 12px; gap: 6px; }
-          .visualizer-wrap { width: clamp(100px, 25vh, 160px); }
-          .meta { gap: 0; }
-          .station { font-size: 16px; }
-          .host { display: none; }
-        }
-
-        /* iOS: increase volume slider tap area, native styling for thumb */
+        /* iOS: increase the volume thumb tap area (a 12px thumb is hard
+           to grab on touch). The play button min-height is set inline via
+           the supports-[-webkit-touch-callout:none]: variant. */
         @supports (-webkit-touch-callout: none) {
-          .volume-slider { height: 6px; }
-          .volume-slider::-webkit-slider-thumb { width: 22px; height: 22px; }
-          .play-btn { min-height: 44px; }
+          .volume-slider::-webkit-slider-thumb {
+            width: 22px;
+            height: 22px;
+          }
         }
       `}</style>
     </section>
