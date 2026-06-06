@@ -12,155 +12,54 @@ interface Props {
 //   3) connect the audio element to the analyser
 // The visual is a centered neon button with subtle pulse — it disappears
 // immediately on click so it doesn't block subsequent interactions.
+//
+// Tailwind v4 migration: the previous 80-line <style> block is gone.
+// All keyframes (ring-spin, ring-spin-reverse, neon-breathe) are now
+// global `animate-*` utilities; all design tokens come from the @theme
+// block in src/styles/globals.css. The radial gradient overlay uses
+// Tailwind's arbitrary-value syntax for the multi-stop background.
 export function EnterOverlay({ onEnter, visible }: Props) {
   if (!visible) return null;
 
   return (
-    <div className="enter-overlay" role="dialog" aria-modal="true" aria-label="Enter RadioAI">
-      <div className="enter-stack">
-        <div className="enter-glyph" aria-hidden>
-          <span className="enter-ring r1" />
-          <span className="enter-ring r2" />
-          <span className="enter-ring r3" />
-          <span className="enter-core" />
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="Enter RadioAI"
+      className="fixed inset-0 z-[100] flex animate-fade-in items-center justify-center p-6 [background:radial-gradient(ellipse_at_center,rgba(20,20,42,0.92)_0%,rgba(5,5,9,0.98)_70%),linear-gradient(180deg,#050509_0%,#0d0d18_100%)]"
+    >
+      <div className="flex max-w-[480px] flex-col items-center gap-5 text-center landscape:max-h-[500px]:gap-3 max-sm:gap-3">
+        <div
+          aria-hidden
+          className="relative flex h-[120px] w-[120px] items-center justify-center max-[360px]:h-[90px] max-[360px]:w-[90px] landscape:max-h-[500px]:h-16 landscape:max-h-[500px]:w-16"
+        >
+          <span className="absolute inset-0 rounded-full border border-dashed border-neon-cyan opacity-70 animate-ring-spin" />
+          <span className="absolute inset-3 rounded-full border border-neon-magenta opacity-70 animate-[ring-spin-reverse_12s_linear_infinite] max-[360px]:inset-[9px] landscape:max-h-[500px]:inset-2" />
+          <span className="absolute inset-6 rounded-full border border-neon-violet opacity-70 animate-[neon-breathe_2s_ease-in-out_infinite] max-[360px]:inset-[18px] landscape:max-h-[500px]:inset-4" />
+          <span className="h-5 w-5 rounded-full bg-neon-cyan animate-[neon-breathe_1.4s_ease-in-out_infinite] [box-shadow:0_0_24px_#00f0ff,0_0_48px_rgba(0,240,255,0.4)] max-[360px]:h-4 max-[360px]:w-4 landscape:max-h-[500px]:h-3.5 landscape:max-h-[500px]:w-3.5" />
         </div>
-        <div className="enter-bracket mono">[ signal.lock ]</div>
-        <h1 className="enter-title display">RADIO AI</h1>
-        <p className="enter-sub mono">live signal · ai-driven broadcast</p>
-        <button className="enter-btn display" onClick={onEnter} autoFocus>
-          <span className="enter-btn-bracket">[</span>
-          <span className="enter-btn-text">TAP TO ENTER THE FREQUENCY</span>
-          <span className="enter-btn-bracket">]</span>
+        <div className="font-mono text-[11px] uppercase tracking-[0.2em] text-neon-cyan opacity-70">
+          [ signal.lock ]
+        </div>
+        <h1 className="m-0 font-bold tracking-[0.18em] text-text-primary [font-size:clamp(40px,9vw,64px)] [text-shadow:0_0_24px_rgba(0,240,255,0.3)] max-sm:tracking-[0.1em] max-[360px]:[font-size:clamp(32px,10vw,48px)] landscape:max-h-[500px]:text-[28px] landscape:max-h-[500px]:tracking-[0.12em]">
+          RADIO AI
+        </h1>
+        <p className="m-0 font-mono text-[12px] tracking-[0.1em] text-text-secondary landscape:max-h-[500px]:text-[11px]">
+          live signal · ai-driven broadcast
+        </p>
+        <button
+          onClick={onEnter}
+          autoFocus
+          className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md border-[1.5px] border-neon-cyan bg-transparent px-8 py-4 text-sm font-medium uppercase tracking-[0.18em] text-neon-cyan transition-all [box-shadow:0_0_16px_rgba(0,240,255,0.2),inset_0_0_16px_rgba(0,240,255,0.05)] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.08)] hover:[box-shadow:0_0_32px_rgba(0,240,255,0.4),inset_0_0_24px_rgba(0,240,255,0.1)] active:translate-y-0 max-sm:px-5 max-sm:py-3.5 max-sm:text-xs max-sm:tracking-[0.12em] landscape:max-h-[500px]:px-[18px] landscape:max-h-[500px]:py-2.5 landscape:max-h-[500px]:text-[11px]"
+        >
+          <span className="text-neon-magenta opacity-70">[</span>
+          <span>TAP TO ENTER THE FREQUENCY</span>
+          <span className="text-neon-magenta opacity-70">]</span>
         </button>
-        <p className="enter-hint mono">audio requires user gesture to comply with browser autoplay policy</p>
+        <p className="m-0 max-w-[320px] font-mono text-[10px] leading-[1.5] tracking-[0.08em] text-text-dim landscape:max-h-[500px]:text-[9px]">
+          audio requires user gesture to comply with browser autoplay policy
+        </p>
       </div>
-
-      <style>{`
-        .enter-overlay {
-          position: fixed;
-          inset: 0;
-          background:
-            radial-gradient(ellipse at center, rgba(20, 20, 42, 0.92) 0%, rgba(5, 5, 9, 0.98) 70%),
-            linear-gradient(180deg, #050509 0%, #0d0d18 100%);
-          z-index: 100;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 24px;
-          animation: fade-in 0.4s var(--ease-out);
-        }
-        .enter-stack {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 20px;
-          max-width: 480px;
-          text-align: center;
-        }
-        .enter-glyph {
-          position: relative;
-          width: 120px;
-          height: 120px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .enter-ring {
-          position: absolute;
-          inset: 0;
-          border-radius: 50%;
-          border: 1px solid var(--neon-cyan);
-          opacity: 0.7;
-        }
-        .enter-ring.r1 { animation: ring-spin 8s linear infinite; border-style: dashed; border-color: var(--neon-cyan); }
-        .enter-ring.r2 { animation: ring-spin-reverse 12s linear infinite; inset: 12px; border-color: var(--neon-magenta); }
-        .enter-ring.r3 { animation: neon-breathe 2s ease-in-out infinite; inset: 24px; border-color: var(--neon-violet); }
-        .enter-core {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: var(--neon-cyan);
-          box-shadow: 0 0 24px var(--neon-cyan), 0 0 48px rgba(0, 240, 255, 0.4);
-          animation: neon-breathe 1.4s ease-in-out infinite;
-        }
-        .enter-bracket {
-          font-size: 11px;
-          letter-spacing: 0.2em;
-          color: var(--neon-cyan);
-          text-transform: uppercase;
-          opacity: 0.7;
-        }
-        .enter-title {
-          font-size: clamp(40px, 9vw, 64px);
-          font-weight: 700;
-          color: var(--text-primary);
-          letter-spacing: 0.18em;
-          margin: 0;
-          text-shadow: 0 0 24px rgba(0, 240, 255, 0.3);
-        }
-        .enter-sub {
-          font-size: 12px;
-          color: var(--text-secondary);
-          letter-spacing: 0.1em;
-          margin: 0;
-        }
-        .enter-btn {
-          margin-top: 8px;
-          padding: 16px 32px;
-          background: transparent;
-          border: 1.5px solid var(--neon-cyan);
-          color: var(--neon-cyan);
-          font-size: 14px;
-          font-weight: 500;
-          letter-spacing: 0.18em;
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          text-transform: uppercase;
-          position: relative;
-          transition: all 0.25s var(--ease-out);
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          box-shadow: 0 0 16px rgba(0, 240, 255, 0.2), inset 0 0 16px rgba(0, 240, 255, 0.05);
-        }
-        .enter-btn:hover {
-          background: rgba(0, 240, 255, 0.08);
-          box-shadow: 0 0 32px rgba(0, 240, 255, 0.4), inset 0 0 24px rgba(0, 240, 255, 0.1);
-          transform: translateY(-2px);
-        }
-        .enter-btn:active { transform: translateY(0); }
-        .enter-btn-bracket { color: var(--neon-magenta); opacity: 0.7; }
-        .enter-hint {
-          font-size: 10px;
-          color: var(--text-dim);
-          letter-spacing: 0.08em;
-          max-width: 320px;
-          line-height: 1.5;
-          margin: 0;
-        }
-        @media (max-width: 480px) {
-          .enter-title { letter-spacing: 0.1em; }
-          .enter-btn { padding: 14px 20px; font-size: 12px; letter-spacing: 0.12em; }
-        }
-        @media (max-width: 360px) {
-          .enter-glyph { width: 90px; height: 90px; }
-          .enter-glyph .enter-ring.r2 { inset: 9px; }
-          .enter-glyph .enter-ring.r3 { inset: 18px; }
-          .enter-glyph .enter-core { width: 16px; height: 16px; }
-          .enter-title { font-size: clamp(32px, 10vw, 48px); }
-        }
-        @media (orientation: landscape) and (max-height: 500px) {
-          .enter-stack { gap: 12px; }
-          .enter-glyph { width: 64px; height: 64px; }
-          .enter-glyph .enter-ring.r2 { inset: 8px; }
-          .enter-glyph .enter-ring.r3 { inset: 16px; }
-          .enter-glyph .enter-core { width: 14px; height: 14px; }
-          .enter-title { font-size: 28px; letter-spacing: 0.12em; }
-          .enter-sub { font-size: 11px; }
-          .enter-btn { padding: 10px 18px; font-size: 11px; }
-          .enter-hint { font-size: 9px; }
-        }
-      `}</style>
     </div>
   );
 }
