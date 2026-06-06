@@ -7,6 +7,7 @@ import { MessageWallPanel } from "@/components/MessageWallPanel";
 import { EnterOverlay } from "@/components/EnterOverlay";
 import { IosInstallHint } from "@/components/IosInstallHint";
 import { wsBaseUrl } from "@/lib/ws-url";
+import { useWakeLock } from "@/lib/wake-lock";
 
 interface Theme {
   id: string;
@@ -360,6 +361,14 @@ export default function Home() {
       navigator.mediaSession.setActionHandler("pause", null);
     };
   }, [hasEntered]);
+
+  // === Screen wake lock: keep the device awake while audio is playing
+  //     OR the buffer/WS is alive (covers the brief gap between PLAY
+  //     click and first segment, plus inter-segment pauses). All three
+  //     signals go false on explicit stopPlayback, so the screen still
+  //     dims once the user stops. See src/lib/wake-lock.ts for the
+  //     platform support matrix. ===
+  useWakeLock(isPlaying || connected || bufferStatus.ready);
 
   // === Visibility / page-lifecycle guard: when the screen turns off or
   //     the OS suspends the page, some browsers pause the <audio>.

@@ -66,8 +66,6 @@ next-env.d.ts
 /omnivoice-tts-ComfyUI.md
 /AGENTS.md
 /CLAUDE.md
-AGENTS.md
-CLAUDE.md
 
 # WebSocket manual-test page route
 /src/app/ws-test/
