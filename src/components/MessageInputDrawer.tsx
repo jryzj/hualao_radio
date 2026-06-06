@@ -220,7 +220,9 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
           border: 1px solid var(--border);
           border-radius: var(--radius-md);
           color: var(--text-primary);
-          font-size: 14px;
+          /* 16px minimum on iOS — anything smaller and Safari auto-zooms
+             the viewport on focus, breaking the layout. */
+          font-size: 16px;
           font-family: var(--font-body);
           transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
         }
@@ -308,7 +310,7 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
         }
         @media (max-width: 380px) {
           .input-drawer { padding: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
-          .drawer-input { padding: 10px 12px; font-size: 13px; }
+          .drawer-input { padding: 10px 12px; font-size: 16px; }
           .drawer-send { padding: 10px 14px; font-size: 11px; }
         }
       `}</style>

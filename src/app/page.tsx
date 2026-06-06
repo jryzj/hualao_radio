@@ -5,6 +5,7 @@ import { type WallMessage } from "@/components/MessageWall";
 import { MessageInputDrawer } from "@/components/MessageInputDrawer";
 import { MessageWallPanel } from "@/components/MessageWallPanel";
 import { EnterOverlay } from "@/components/EnterOverlay";
+import { IosInstallHint } from "@/components/IosInstallHint";
 import { wsBaseUrl } from "@/lib/ws-url";
 
 interface Theme {
@@ -309,6 +310,12 @@ export default function Home() {
         title,
         artist: `Host: ${hostName}`,
         album: "Live Broadcast",
+        // Lock-screen / control-center artwork. Reuses the PWA icons;
+        // browsers ignore missing images and the audio still plays.
+        artwork: [
+          { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+          { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+        ],
       });
     };
     updateMetadata();
@@ -711,6 +718,10 @@ export default function Home() {
       {/* First-visit overlay (only when not yet entered) */}
       <EnterOverlay visible={showEnter && !hasEntered} onEnter={handleEnter} />
 
+      {/* iOS Safari install nudge. Self-suppresses once dismissed or
+          when the page is already running as an installed PWA. */}
+      <IosInstallHint isPlaying={isPlaying} />
+
       <style>{`
         .listen-page {
           position: relative;
@@ -919,6 +930,49 @@ export default function Home() {
             gap: 8px;
           }
           .fab-text { display: inline; font-size: 12px; min-width: 56px; }
+        }
+
+        /* iOS Safari install nudge — pinned to the top of the viewport
+           so it never overlaps the player or FABs. Sits above the FAB
+           stack (z 50) but below the input drawer (z 70) so a focused
+           drawer covers it. */
+        .ios-install-hint {
+          position: fixed;
+          top: max(12px, env(safe-area-inset-top, 12px));
+          left: 12px;
+          right: 12px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 10px 14px;
+          background: rgba(13, 13, 24, 0.92);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
+          border: 1px solid rgba(140, 160, 255, 0.3);
+          border-radius: 10px;
+          color: #e0e2ff;
+          font-size: 14px;
+          line-height: 1.4;
+          z-index: 60;
+          pointer-events: auto;
+        }
+        .ios-install-hint button {
+          background: none;
+          border: 0;
+          color: inherit;
+          font-size: 20px;
+          line-height: 1;
+          cursor: pointer;
+          padding: 4px 8px;
+          margin-left: auto;
+        }
+        @media (min-width: 768px) {
+          .ios-install-hint {
+            left: 50%;
+            right: auto;
+            transform: translateX(-50%);
+            max-width: 540px;
+          }
         }
       `}</style>
     </div>
