@@ -32,285 +32,201 @@ export default function AdminDashboard() {
     });
   }, []);
 
-  const s: Record<string, React.CSSProperties> = {
-    container: { minHeight: "100vh", background: "#0a0a0c", color: "#f0ece4" },
-    header: {
-      display: "flex", alignItems: "center", justifyContent: "space-between",
-      padding: "16px 20px", borderBottom: "1px solid #1a1a22",
-      flexWrap: "wrap", gap: 12,
-    },
-    logo: {
-      fontFamily: "'Oswald', sans-serif", fontSize: 16, fontWeight: 700,
-      letterSpacing: 2, color: "#e8a84c", textDecoration: "none",
-    },
-    nav: {
-      display: "flex", gap: 4, flexWrap: "wrap",
-    },
-    navLink: {
-      padding: "6px 12px", fontSize: 12, color: "#9a958c",
-      borderRadius: 4, transition: "all 0.2s", textDecoration: "none",
-    },
-    main: {
-      padding: "24px 20px", maxWidth: 1400, margin: "0 auto",
-    },
-    sectionTitle: {
-      fontFamily: "'Oswald', sans-serif", fontSize: 11, fontWeight: 500,
-      letterSpacing: 3, color: "#5a5850", marginBottom: 16,
-      textTransform: "uppercase",
-    },
-    statGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(2, 1fr)",
-      gap: 12,
-      marginBottom: 32,
-    },
-    statCard: {
-      background: "linear-gradient(145deg, #12121a, #0e0e14)",
-      border: "1px solid #1a1a22",
-      borderRadius: 10,
-      padding: 20,
-      position: "relative",
-      overflow: "hidden",
-    },
-    statValue: {
-      fontFamily: "'Oswald', sans-serif",
-      fontSize: 36, fontWeight: 700, color: "#f0ece4", lineHeight: 1, marginBottom: 6,
-    },
-    statLabel: { fontSize: 12, color: "#5a5850" },
-    statAccent: {
-      position: "absolute", top: 0, right: 0,
-      width: 60, height: 60,
-      background: "linear-gradient(135deg, rgba(232,168,76,0.12) 0%, transparent 60%)",
-      borderRadius: "0 10px 0 50px",
-    },
-    liveSection: {
-      background: "linear-gradient(145deg, #12121a, #0e0e14)",
-      border: "1px solid #1a1a22",
-      borderRadius: 10,
-      padding: 24,
-      marginBottom: 32,
-    },
-    liveBadge: {
-      display: "inline-flex", alignItems: "center", gap: 6,
-      padding: "4px 10px",
-      background: "rgba(232, 168, 76, 0.1)",
-      border: "1px solid rgba(232, 168, 76, 0.3)",
-      borderRadius: 4, marginBottom: 16,
-    },
-    liveDot: {
-      width: 5, height: 5, borderRadius: "50%",
-      background: "#e8a84c",
-      animation: "pulse 1.5s ease-in-out infinite",
-    },
-    liveLabel: {
-      fontFamily: "'Oswald', sans-serif",
-      fontSize: 9, fontWeight: 500, letterSpacing: 2, color: "#e8a84c",
-    },
-    quickLinks: {
-      display: "grid",
-      gridTemplateColumns: "1fr",
-      gap: 12,
-    },
-    quickLink: {
-      display: "flex", alignItems: "center", gap: 14,
-      padding: 16, background: "#12121a",
-      border: "1px solid #1a1a22",
-      borderRadius: 8,
-      transition: "all 0.2s",
-      textDecoration: "none", color: "inherit",
-    },
-    quickLinkIcon: {
-      width: 38, height: 38, borderRadius: 8,
-      background: "linear-gradient(145deg, #1a1a20, #222228)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      flexShrink: 0,
-    },
-    quickLinkTitle: {
-      fontFamily: "'Oswald', sans-serif",
-      fontSize: 14, fontWeight: 500, color: "#f0ece4", marginBottom: 3,
-    },
-    quickLinkDesc: { fontSize: 11, color: "#5a5850" },
-  };
+  // Tailwind v4 migration: the 30 style={{}} props + two <style> blocks
+  // (one for the pulse keyframe + responsive grid, one for the
+  // stagger-children fadeSlideUp animation) are replaced with utility
+  // classes.
+  //
+  // Decisions:
+  //   - Admin uses a gold (#e8a84c) accent, not the cyberpunk listener
+  //     theme, so all gold colors are arbitrary values.
+  //   - The stagger-children nth-child delay pattern is kept in a tiny
+  //     <style> block — six sibling-position selectors are awkward to
+  //     express as utility classes, and the original kept the same
+  //     approach.
+  //   - The dashboard's "pulse" keyframe is scoped to this component
+  //     (not added to @theme) since it's only used by the live dot.
+  //   - Responsive grid breakpoints (640/768/1024) → sm:/md:/lg:
+  //     variants on the grid containers.
 
   return (
-    <div style={s.container}>
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.4; }
-        }
-        a:hover {
-          background: #1a1a20;
-          color: #e8a84c !important;
-        }
-        @media (min-width: 640px) {
-          .stat-grid {
-            grid-template-columns: repeat(4, 1fr) !important;
-          }
-        }
-        @media (min-width: 768px) {
-          .quick-links {
-            grid-template-columns: repeat(2, 1fr) !important;
-          }
-          .header {
-            padding: 20px 32px !important;
-          }
-          .main {
-            padding: 32px !important;
-          }
-        }
-        @media (min-width: 1024px) {
-          .quick-links {
-            grid-template-columns: repeat(3, 1fr) !important;
-          }
-        }
-      `}</style>
-
-      <header style={s.header}>
-        <Link href="/admin" style={s.logo}>RADIO AI</Link>
-        <nav style={s.nav}>
-          <Link href="/admin" style={s.navLink}>概览</Link>
-          <Link href="/admin/topics" style={s.navLink}>主题</Link>
-          <Link href="/admin/personas" style={s.navLink}>人设</Link>
-          <Link href="/admin/workflows" style={s.navLink}>工作流</Link>
-          <Link href="/admin/messages" style={s.navLink}>留言</Link>
-          <Link href="/admin/config" style={s.navLink}>配置</Link>
+    <div className="min-h-screen bg-[#0a0a0c] text-[#f0ece4]">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#1a1a22] px-5 py-4 md:px-8 md:py-5">
+        <Link href="/admin" className="font-display text-base font-bold tracking-[2px] text-[#e8a84c] no-underline">
+          RADIO AI
+        </Link>
+        <nav className="flex flex-wrap gap-1">
+          <Link href="/admin" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            概览
+          </Link>
+          <Link href="/admin/topics" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            主题
+          </Link>
+          <Link href="/admin/personas" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            人设
+          </Link>
+          <Link href="/admin/workflows" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            工作流
+          </Link>
+          <Link href="/admin/messages" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            留言
+          </Link>
+          <Link href="/admin/config" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            配置
+          </Link>
         </nav>
       </header>
 
-      <main style={s.main}>
-        <h2 style={s.sectionTitle}>系统概览</h2>
+      <main className="mx-auto max-w-[1400px] px-5 py-6 md:px-8 md:py-8">
+        <h2 className="mb-4 font-display text-[11px] font-medium uppercase tracking-[3px] text-[#5a5850]">
+          系统概览
+        </h2>
 
-        <div style={s.statGrid} className="stat-grid stagger-children">
-          <div style={s.statCard}>
-            <div style={s.statAccent} />
-            <div style={s.statValue}>{stats.messages}</div>
-            <div style={s.statLabel}>总留言数</div>
+        <div className="stagger-children mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="relative overflow-hidden rounded-[10px] border border-[#1a1a22] [background:linear-gradient(145deg,#12121a,#0e0e14)] p-5">
+            <div className="absolute top-0 right-0 h-[60px] w-[60px] rounded-[0_10px_0_50px] [background:linear-gradient(135deg,rgba(232,168,76,0.12)_0%,transparent_60%)]" />
+            <div className="mb-1.5 font-display text-[36px] font-bold leading-none text-[#f0ece4]">
+              {stats.messages}
+            </div>
+            <div className="text-xs text-[#5a5850]">总留言数</div>
           </div>
-          <div style={s.statCard}>
-            <div style={s.statAccent} />
-            <div style={s.statValue}>{stats.personas}</div>
-            <div style={s.statLabel}>人设数量</div>
+          <div className="relative overflow-hidden rounded-[10px] border border-[#1a1a22] [background:linear-gradient(145deg,#12121a,#0e0e14)] p-5">
+            <div className="absolute top-0 right-0 h-[60px] w-[60px] rounded-[0_10px_0_50px] [background:linear-gradient(135deg,rgba(232,168,76,0.12)_0%,transparent_60%)]" />
+            <div className="mb-1.5 font-display text-[36px] font-bold leading-none text-[#f0ece4]">
+              {stats.personas}
+            </div>
+            <div className="text-xs text-[#5a5850]">人设数量</div>
           </div>
-          <div style={s.statCard}>
-            <div style={s.statAccent} />
-            <div style={s.statValue}>{stats.workflows}</div>
-            <div style={s.statLabel}>工作流</div>
+          <div className="relative overflow-hidden rounded-[10px] border border-[#1a1a22] [background:linear-gradient(145deg,#12121a,#0e0e14)] p-5">
+            <div className="absolute top-0 right-0 h-[60px] w-[60px] rounded-[0_10px_0_50px] [background:linear-gradient(135deg,rgba(232,168,76,0.12)_0%,transparent_60%)]" />
+            <div className="mb-1.5 font-display text-[36px] font-bold leading-none text-[#f0ece4]">
+              {stats.workflows}
+            </div>
+            <div className="text-xs text-[#5a5850]">工作流</div>
           </div>
-          <div style={s.statCard}>
-            <div style={s.statAccent} />
-            <div style={s.statValue}>{stats.themes}</div>
-            <div style={s.statLabel}>直播主题</div>
+          <div className="relative overflow-hidden rounded-[10px] border border-[#1a1a22] [background:linear-gradient(145deg,#12121a,#0e0e14)] p-5">
+            <div className="absolute top-0 right-0 h-[60px] w-[60px] rounded-[0_10px_0_50px] [background:linear-gradient(135deg,rgba(232,168,76,0.12)_0%,transparent_60%)]" />
+            <div className="mb-1.5 font-display text-[36px] font-bold leading-none text-[#f0ece4]">
+              {stats.themes}
+            </div>
+            <div className="text-xs text-[#5a5850]">直播主题</div>
           </div>
         </div>
 
-        <div style={s.liveSection}>
-          <div style={s.liveBadge}>
-            <div style={s.liveDot} />
-            <span style={s.liveLabel}>当前直播</span>
+        <div className="mb-8 rounded-[10px] border border-[#1a1a22] [background:linear-gradient(145deg,#12121a,#0e0e14)] p-6">
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded border border-[rgba(232,168,76,0.3)] bg-[rgba(232,168,76,0.1)] px-2.5 py-1">
+            <span className="h-[5px] w-[5px] animate-[pulse_1.5s_ease-in-out_infinite] rounded-full bg-[#e8a84c]" />
+            <span className="font-display text-[9px] font-medium tracking-[2px] text-[#e8a84c]">
+              当前直播
+            </span>
           </div>
           {theme ? (
             <div>
-              <h3 style={{ fontFamily: "'Oswald', sans-serif", fontSize: 20, fontWeight: 700, marginBottom: 6 }}>
-                {theme.name}
-              </h3>
-              <p style={{ color: "#9a958c", marginBottom: 12, fontSize: 13 }}>{theme.description || "无描述"}</p>
-              <div style={{ display: "flex", gap: 20, fontSize: 12, color: "#5a5850", flexWrap: "wrap" }}>
+              <h3 className="mb-1.5 font-display text-xl font-bold">{theme.name}</h3>
+              <p className="mb-3 text-[13px] text-[#9a958c]">{theme.description || "无描述"}</p>
+              <div className="flex flex-wrap gap-5 text-xs text-[#5a5850]">
                 {theme.persona && <span>主持人：{theme.persona.name}</span>}
                 {theme.workflow && <span>工作流：{theme.workflow.name}</span>}
               </div>
             </div>
           ) : (
-            <div style={{ color: "#5a5850" }}>
+            <div className="text-[#5a5850]">
               <p>当前无进行中的直播</p>
-              <Link href="/admin/topics" style={{ color: "#e8a84c", fontSize: 12, marginTop: 8, display: "inline-block" }}>
+              <Link href="/admin/topics" className="mt-2 inline-block text-xs text-[#e8a84c]">
                 前往主题管理启动直播 →
               </Link>
             </div>
           )}
         </div>
 
-        <h2 style={{ ...s.sectionTitle, marginBottom: 16 }}>快捷入口</h2>
-        <div style={s.quickLinks} className="quick-links stagger-children">
-          <Link href="/admin/topics" style={s.quickLink}>
-            <div style={s.quickLinkIcon}>
+        <h2 className="mb-4 font-display text-[11px] font-medium uppercase tracking-[3px] text-[#5a5850]">
+          快捷入口
+        </h2>
+        <div className="stagger-children grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <Link href="/admin/topics" className="flex items-center gap-3.5 rounded-lg border border-[#1a1a22] bg-[#12121a] p-4 text-inherit no-underline transition-all duration-200 hover:bg-[#1a1a20]">
+            <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-lg [background:linear-gradient(145deg,#1a1a20,#222228)]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a84c" strokeWidth="2">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M12 6v6l4 2" />
               </svg>
             </div>
             <div>
-              <div style={s.quickLinkTitle}>直播主题</div>
-              <div style={s.quickLinkDesc}>管理直播主题和人设</div>
+              <div className="mb-0.5 font-display text-sm font-medium text-[#f0ece4]">直播主题</div>
+              <div className="text-[11px] text-[#5a5850]">管理直播主题和人设</div>
             </div>
           </Link>
 
-          <Link href="/admin/personas" style={s.quickLink}>
-            <div style={s.quickLinkIcon}>
+          <Link href="/admin/personas" className="flex items-center gap-3.5 rounded-lg border border-[#1a1a22] bg-[#12121a] p-4 text-inherit no-underline transition-all duration-200 hover:bg-[#1a1a20]">
+            <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-lg [background:linear-gradient(145deg,#1a1a20,#222228)]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a84c" strokeWidth="2">
                 <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                 <circle cx="12" cy="7" r="4" />
               </svg>
             </div>
             <div>
-              <div style={s.quickLinkTitle}>主持人人设</div>
-              <div style={s.quickLinkDesc}>创建和管理AI主持人</div>
+              <div className="mb-0.5 font-display text-sm font-medium text-[#f0ece4]">主持人人设</div>
+              <div className="text-[11px] text-[#5a5850]">创建和管理AI主持人</div>
             </div>
           </Link>
 
-          <Link href="/admin/workflows" style={s.quickLink}>
-            <div style={s.quickLinkIcon}>
+          <Link href="/admin/workflows" className="flex items-center gap-3.5 rounded-lg border border-[#1a1a22] bg-[#12121a] p-4 text-inherit no-underline transition-all duration-200 hover:bg-[#1a1a20]">
+            <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-lg [background:linear-gradient(145deg,#1a1a20,#222228)]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a84c" strokeWidth="2">
                 <rect x="3" y="3" width="18" height="18" rx="2" />
                 <path d="M9 9h6v6H9z" />
               </svg>
             </div>
             <div>
-              <div style={s.quickLinkTitle}>ComfyUI 工作流</div>
-              <div style={s.quickLinkDesc}>管理工作流配置</div>
+              <div className="mb-0.5 font-display text-sm font-medium text-[#f0ece4]">ComfyUI 工作流</div>
+              <div className="text-[11px] text-[#5a5850]">管理工作流配置</div>
             </div>
           </Link>
 
-          <Link href="/admin/messages" style={s.quickLink}>
-            <div style={s.quickLinkIcon}>
+          <Link href="/admin/messages" className="flex items-center gap-3.5 rounded-lg border border-[#1a1a22] bg-[#12121a] p-4 text-inherit no-underline transition-all duration-200 hover:bg-[#1a1a20]">
+            <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-lg [background:linear-gradient(145deg,#1a1a20,#222228)]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a84c" strokeWidth="2">
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
               </svg>
             </div>
             <div>
-              <div style={s.quickLinkTitle}>留言审核</div>
-              <div style={s.quickLinkDesc}>审核听众留言</div>
+              <div className="mb-0.5 font-display text-sm font-medium text-[#f0ece4]">留言审核</div>
+              <div className="text-[11px] text-[#5a5850]">审核听众留言</div>
             </div>
           </Link>
 
-          <Link href="/admin/config" style={s.quickLink}>
-            <div style={s.quickLinkIcon}>
+          <Link href="/admin/config" className="flex items-center gap-3.5 rounded-lg border border-[#1a1a22] bg-[#12121a] p-4 text-inherit no-underline transition-all duration-200 hover:bg-[#1a1a20]">
+            <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-lg [background:linear-gradient(145deg,#1a1a20,#222228)]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a84c" strokeWidth="2">
                 <circle cx="12" cy="12" r="3" />
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
             </div>
             <div>
-              <div style={s.quickLinkTitle}>系统配置</div>
-              <div style={s.quickLinkDesc}>LLM 和 ComfyUI 设置</div>
+              <div className="mb-0.5 font-display text-sm font-medium text-[#f0ece4]">系统配置</div>
+              <div className="text-[11px] text-[#5a5850]">LLM 和 ComfyUI 设置</div>
             </div>
           </Link>
 
-          <Link href="/listen" target="_blank" style={s.quickLink}>
-            <div style={s.quickLinkIcon}>
+          <Link href="/listen" target="_blank" className="flex items-center gap-3.5 rounded-lg border border-[#1a1a22] bg-[#12121a] p-4 text-inherit no-underline transition-all duration-200 hover:bg-[#1a1a20]">
+            <div className="flex h-[38px] w-[38px] flex-none items-center justify-center rounded-lg [background:linear-gradient(145deg,#1a1a20,#222228)]">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e8a84c" strokeWidth="2">
                 <polygon points="5,3 19,12 5,21" />
               </svg>
             </div>
             <div>
-              <div style={s.quickLinkTitle}>前往直播间</div>
-              <div style={s.quickLinkDesc}>查看公开直播页面</div>
+              <div className="mb-0.5 font-display text-sm font-medium text-[#f0ece4]">前往直播间</div>
+              <div className="text-[11px] text-[#5a5850]">查看公开直播页面</div>
             </div>
           </Link>
         </div>
       </main>
 
       <style>{`
+        /* Stagger entrance animation. Tailwind doesn't have a clean
+           utility for nth-child animation-delay across 6 children, so
+           the small block stays. The fadeSlideUp keyframe is local —
+           not the @theme fade-slide-up one — because the original CSS
+           used this exact name and the behavior is identical. */
         .stagger-children > * {
           opacity: 0;
           animation: fadeSlideUp 0.5s ease-out forwards;
