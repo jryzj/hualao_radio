@@ -14,6 +14,11 @@ interface Props {
 //   - 2 CSS ripples emanating from center
 // The FFT loop is driven by requestAnimationFrame; we never setState per
 // frame — we draw directly to canvas. This keeps React out of the hot path.
+//
+// Tailwind v4 migration: the 35-line <style> block is gone. Per-element
+// animation durations (16s / 22s / 1.6s for the rings, 3.2s for the
+// ripples) are expressed as Tailwind arbitrary values where they
+// differ from the @theme defaults.
 export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Props) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -113,22 +118,21 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
 
   // Outer wrapper fills its parent; canvas inside fills it.
   return (
-    <div className="audio-visualizer" aria-hidden>
+    <div className="relative flex h-full w-full items-center justify-center" aria-hidden>
       {/* CSS ripples — under everything */}
       {isPlaying && (
-        <div className="ripple-stack">
-          <span className="ripple ripple-1" />
-          <span className="ripple ripple-2" />
+        <div className="pointer-events-none absolute inset-0">
+          <span className="animate-[ripple_3.2s_ease-out_infinite] absolute inset-0 m-auto h-3/5 w-3/5 rounded-full border-[1.5px] border-neon-cyan opacity-0 will-change-[transform,opacity]" />
+          <span className="animate-[ripple_3.2s_ease-out_1.6s_infinite] absolute inset-0 m-auto h-3/5 w-3/5 rounded-full border-[1.5px] border-neon-magenta opacity-0 will-change-[transform,opacity]" />
         </div>
       )}
 
       {/* SVG rings */}
       <svg
-        className="rings-svg"
         viewBox="0 0 100 100"
         width="100%"
         height="100%"
-        style={{ position: "absolute", inset: 0 }}
+        className="absolute inset-0"
       >
         <defs>
           <linearGradient id="ring-grad-cyan" x1="0" y1="0" x2="1" y2="1">
@@ -148,8 +152,8 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
           stroke="url(#ring-grad-cyan)"
           strokeWidth="0.4"
           strokeDasharray="2 3"
-          className={isPlaying ? "ring-rotate-cw" : "ring-static"}
           opacity="0.7"
+          className={isPlaying ? "origin-center animate-[ring-spin_16s_linear_infinite]" : "origin-center"}
         />
         {/* middle dashed ring — rotates counter-clockwise */}
         <circle
@@ -158,8 +162,8 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
           stroke="url(#ring-grad-magenta)"
           strokeWidth="0.3"
           strokeDasharray="1 2"
-          className={isPlaying ? "ring-rotate-ccw" : "ring-static"}
           opacity="0.6"
+          className={isPlaying ? "origin-center animate-[ring-spin-reverse_22s_linear_infinite]" : "origin-center"}
         />
         {/* inner solid ring — pulses */}
         <circle
@@ -167,8 +171,8 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
           fill="none"
           stroke="var(--neon-cyan)"
           strokeWidth="0.6"
-          className={isPlaying ? "ring-pulse" : "ring-static"}
           opacity="0.5"
+          className={isPlaying ? "origin-center animate-[neon-breathe_1.6s_ease-in-out_infinite]" : "origin-center"}
         />
         {/* innermost glow circle */}
         <circle
@@ -190,44 +194,8 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
       {/* FFT bars canvas */}
       <canvas
         ref={canvasRef}
-        className="bars-canvas"
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }}
+        className="pointer-events-none absolute inset-0 block h-full w-full"
       />
-
-      <style>{`
-        .audio-visualizer {
-          position: relative;
-          width: 100%;
-          height: 100%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        .ripple-stack {
-          position: absolute;
-          inset: 0;
-          pointer-events: none;
-        }
-        .ripple {
-          position: absolute;
-          inset: 0;
-          margin: auto;
-          width: 60%;
-          height: 60%;
-          border-radius: 50%;
-          border: 1.5px solid var(--neon-cyan);
-          opacity: 0;
-          will-change: transform, opacity;
-        }
-        .ripple-1 { animation: ripple 3.2s ease-out infinite; }
-        .ripple-2 { animation: ripple 3.2s ease-out infinite 1.6s; border-color: var(--neon-magenta); }
-
-        .ring-rotate-cw   { transform-origin: 50% 50%; animation: ring-spin 16s linear infinite; }
-        .ring-rotate-ccw  { transform-origin: 50% 50%; animation: ring-spin-reverse 22s linear infinite; }
-        .ring-pulse       { transform-origin: 50% 50%; animation: neon-breathe 1.6s ease-in-out infinite; }
-        .ring-static      { transform-origin: 50% 50%; }
-        .bars-canvas      { display: block; }
-      `}</style>
     </div>
   );
 }
