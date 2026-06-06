@@ -1,6 +1,10 @@
 "use client";
 import { ReactNode } from "react";
 
+// Tailwind v4 migration: the 12 style={{}} props are replaced with
+// utility classes. The admin uses a gold (#e8a84c) accent — not part
+// of the cyberpunk listener theme — so the colors are arbitrary values
+// for now rather than @theme tokens.
 export default function AdminLayout({ children }: { children: ReactNode }) {
   // Auth is enforced by src/proxy.ts: an unauthenticated request never
   // reaches the /admin tree at all (it gets redirected to /admin/login
@@ -10,20 +14,20 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   // JavaScript — that check always fired and bounced the user straight
   // back to /admin/login. Just render.
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
-      <nav style={{ width: 200, background: "#1a1a20", padding: 20 }}>
-        <h3 style={{ color: "#e8a84c", marginBottom: 16 }}>管理后台</h3>
-        <ul style={{ listStyle: "none", padding: 0 }}>
-          <li><a href="/admin" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>概览</a></li>
-          <li><a href="/admin/topics" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>主题</a></li>
-          <li><a href="/admin/personas" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>人设</a></li>
-          <li><a href="/admin/workflows" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>工作流</a></li>
-          <li><a href="/admin/messages" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>留言</a></li>
-          <li><a href="/admin/news" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>资讯</a></li>
-          <li><a href="/admin/config" style={{ color: "#9a958c", textDecoration: "none", display: "block", padding: "8px 0" }}>配置</a></li>
+    <div className="flex min-h-screen">
+      <nav className="w-[200px] bg-[#1a1a20] p-5">
+        <h3 className="mb-4 text-[#e8a84c]">管理后台</h3>
+        <ul className="list-none p-0">
+          <li><a href="/admin" className="block py-2 text-[#9a958c] no-underline">概览</a></li>
+          <li><a href="/admin/topics" className="block py-2 text-[#9a958c] no-underline">主题</a></li>
+          <li><a href="/admin/personas" className="block py-2 text-[#9a958c] no-underline">人设</a></li>
+          <li><a href="/admin/workflows" className="block py-2 text-[#9a958c] no-underline">工作流</a></li>
+          <li><a href="/admin/messages" className="block py-2 text-[#9a958c] no-underline">留言</a></li>
+          <li><a href="/admin/news" className="block py-2 text-[#9a958c] no-underline">资讯</a></li>
+          <li><a href="/admin/config" className="block py-2 text-[#9a958c] no-underline">配置</a></li>
         </ul>
       </nav>
-      <main style={{ flex: 1, padding: 20 }}>{children}</main>
+      <main className="flex-1 p-5">{children}</main>
     </div>
   );
 }
