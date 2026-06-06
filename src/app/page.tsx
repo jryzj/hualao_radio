@@ -5,6 +5,7 @@ import { type WallMessage } from "@/components/MessageWall";
 import { MessageInputDrawer } from "@/components/MessageInputDrawer";
 import { MessageWallPanel } from "@/components/MessageWallPanel";
 import { EnterOverlay } from "@/components/EnterOverlay";
+import { wsBaseUrl } from "@/lib/ws-url";
 
 interface Theme {
   id: string;
@@ -148,17 +149,18 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     if (!messageFrontendVisible) return;
-    // Match the page's protocol: wss when the page is HTTPS, ws in dev.
-    // Browsers block ws:// connections from HTTPS pages, so this MUST
-    // track window.location.protocol. The WS server (ws-server/index.ts)
-    // listens on :8080 — make sure your reverse proxy / Cloudflare
-    // forwards the WSS upgrade on :443 to :8080 on the origin.
+    // WS base URL — set NEXT_PUBLIC_WS_URL in .env (or your deploy
+    // config) when the production WSS endpoint is on a different
+    // host/port than the ws-server's default :8080 (e.g. a
+    // Cloudflare origin rule, Tunnel, or nginx/caddy in front). If
+    // unset, the browser connects to ws/wss on the page's hostname
+    // at :8080, which matches the ws-server default for dev.
     //
     // The socket auto-reconnects with exponential backoff on close.
     // Without this, a transient drop (ws-server restart, network blip,
     // reverse-proxy idle timeout) leaves the page permanently blind to
     // new messages until the user manually reloads.
-    const wsScheme = window.location.protocol === "https:" ? "wss:" : "ws:";
+    const base = wsBaseUrl();
     let cancelled = false;
     let ws: WebSocket | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -167,7 +169,7 @@ export default function Home() {
 
     const connect = () => {
       if (cancelled) return;
-      ws = new WebSocket(`${wsScheme}//${window.location.hostname}:8080/messages`);
+      ws = new WebSocket(`${base}/messages`);
       msgSocketRef.current = ws;
       ws.onopen = () => { backoffMs = 1000; };
       ws.onmessage = (e) => {
@@ -451,11 +453,9 @@ export default function Home() {
     if (!audioRef.current) return;
     const t = await fetch("/api/config").then(r => r.json()).catch(() => null);
     if (!t) return;
-    // Match the page protocol: wss on HTTPS, ws in dev. The WS server
-    // itself is HTTP-only on :8080 — see the comment on the message
-    // socket above for the reverse-proxy / Cloudflare requirement.
-    const wsScheme = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${wsScheme}//${window.location.hostname}:8080/audio?themeId=${t.id}`;
+    // Same base as the message socket — see the comment there about
+    // NEXT_PUBLIC_WS_URL.
+    const wsUrl = `${wsBaseUrl()}/audio?themeId=${t.id}`;
     const socket = new WebSocket(wsUrl);
     socket.binaryType = "arraybuffer";
     socketRef.current = socket;
