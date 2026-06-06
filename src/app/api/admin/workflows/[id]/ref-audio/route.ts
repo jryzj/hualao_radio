@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { resolveUnderPublic, PUBLIC_ROOT } from "@/lib/upload-path";
 import fs from "fs";
 import path from "path";
 
@@ -19,18 +20,9 @@ const AUDIO_EXTS = new Set([".wav", ".mp3", ".flac", ".m4a", ".ogg", ".oga", ".o
 // PUT body, which let an attacker store e.g. "../../.env". Even
 // though the workflow PUT is now whitelisted, the value may have
 // been written before the fix landed, so we still resolve and
-// check containment on every read.
-const PUBLIC_ROOT = path.resolve(process.cwd(), "public");
-
-function resolveUnderPublic(rel: string): string | null {
-  // Reject NUL bytes, backslashes (we're on POSIX-style paths in
-  // the DB even on Windows since path.posix.join is used), and
-  // anything that doesn't normalize to a descendant of PUBLIC_ROOT.
-  if (!rel || rel.includes("\0")) return null;
-  const abs = path.resolve(PUBLIC_ROOT, rel);
-  if (!abs.startsWith(PUBLIC_ROOT + path.sep) && abs !== PUBLIC_ROOT) return null;
-  return abs;
-}
+// check containment on every read. The containment helper lives
+// in @/lib/upload-path so the /uploads/* serve route uses the
+// same rule and the two can't drift.
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
