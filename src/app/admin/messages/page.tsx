@@ -130,22 +130,18 @@ export default function MessagesPage() {
 
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
+  // Tailwind v4 migration: 38 style={{}} props with three repeating
+  // {padding:6} on every table cell replaced with a shared cellClass.
+  // Per-row conditional (isConfirming → bg-[#fff4e5]) and per-cell
+  // conditional colors (status / visible / ai-reason) expressed inline.
+
   return (
-    <div style={{ padding: 16 }}>
+    <div className="p-4">
       <h1>留言管理</h1>
 
-      <div
-        style={{
-          marginBottom: 16,
-          padding: 12,
-          border: "1px solid #2a2a32",
-          borderRadius: 6,
-          background: "linear-gradient(145deg, #1a1a20, #222228)",
-          color: "#f0ece4",
-        }}
-      >
-        <div style={{ fontWeight: 600, marginBottom: 8 }}>前台可见留言配置</div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+      <div className="mb-4 rounded-md border border-[#2a2a32] [background:linear-gradient(145deg,#1a1a20,#222228)] p-3 text-[#f0ece4]">
+        <div className="mb-2 font-semibold">前台可见留言配置</div>
+        <div className="flex flex-wrap items-center gap-2">
           <label htmlFor="max-visible">前台显示的最多留言数（1-500）：</label>
           <input
             id="max-visible"
@@ -154,18 +150,9 @@ export default function MessagesPage() {
             max={500}
             value={maxVisibleInput}
             onChange={e => setMaxVisibleInput(e.target.value)}
-            style={{
-              width: 80,
-              padding: "4px 8px",
-              background: "#0a0a0c",
-              border: "1px solid #2a2a32",
-              borderRadius: 4,
-              color: "#f0ece4",
-            }}
+            className="w-20 rounded border border-[#2a2a32] bg-[#0a0a0c] px-2 py-1 text-[#f0ece4]"
           />
-          <label htmlFor="scroll-speed" style={{ marginLeft: 12 }}>
-            滚动速度（5-600 秒/屏）：
-          </label>
+          <label htmlFor="scroll-speed" className="ml-3">滚动速度（5-600 秒/屏）：</label>
           <input
             id="scroll-speed"
             type="number"
@@ -173,19 +160,9 @@ export default function MessagesPage() {
             max={600}
             value={scrollSpeedInput}
             onChange={e => setScrollSpeedInput(e.target.value)}
-            style={{
-              width: 80,
-              padding: "4px 8px",
-              background: "#0a0a0c",
-              border: "1px solid #2a2a32",
-              borderRadius: 4,
-              color: "#f0ece4",
-            }}
+            className="w-20 rounded border border-[#2a2a32] bg-[#0a0a0c] px-2 py-1 text-[#f0ece4]"
           />
-          <label
-            htmlFor="frontend-visible"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 12, cursor: "pointer" }}
-          >
+          <label htmlFor="frontend-visible" className="ml-3 inline-flex cursor-pointer items-center gap-1.5">
             <input
               id="frontend-visible"
               type="checkbox"
@@ -202,35 +179,31 @@ export default function MessagesPage() {
                 frontendVisible === savedFrontendVisibleRef.current &&
                 parseInt(scrollSpeedInput, 10) === savedScrollSpeedRef.current)
             }
-            style={{
-              padding: "4px 12px",
-              background: "linear-gradient(145deg, #e8a84c, #c77b4a)",
-              border: "none",
-              borderRadius: 4,
-              color: "#0a0a0c",
-              fontSize: 12,
-              cursor: "pointer",
-            }}
+            className="cursor-pointer rounded border-0 px-3 py-1 text-xs text-[#0a0a0c] [background:linear-gradient(145deg,#e8a84c,#c77b4a)] disabled:cursor-default disabled:opacity-70"
           >
             {savingConfig ? "保存中…" : "保存"}
           </button>
-          <span style={{ color: "#9a958c", fontSize: 12 }}>
+          <span className="text-xs text-[#9a958c]">
             当前：{maxVisible} 条 · {scrollSpeed} 秒/屏 · {frontendVisible ? "已开启" : "已关闭"}
           </span>
-          {configMsg && <span style={{ color: configMsg.startsWith("✓") ? "green" : "red" }}>{configMsg}</span>}
+          {configMsg && (
+            <span className={configMsg.startsWith("✓") ? "text-green-600" : "text-red-600"}>
+              {configMsg}
+            </span>
+          )}
         </div>
       </div>
 
-      <table border={1} style={{ width: "100%", borderCollapse: "collapse" }}>
+      <table className="w-full border-collapse">
         <thead>
           <tr>
-            <th style={{ padding: 6 }}>内容</th>
-            <th style={{ padding: 6 }}>作者</th>
-            <th style={{ padding: 6 }}>状态</th>
-            <th style={{ padding: 6 }}>显示</th>
-            <th style={{ padding: 6 }}>时间</th>
-            <th style={{ padding: 6 }}>AI 备注</th>
-            <th style={{ padding: 6 }}>操作</th>
+            <th className="p-1.5">内容</th>
+            <th className="p-1.5">作者</th>
+            <th className="p-1.5">状态</th>
+            <th className="p-1.5">显示</th>
+            <th className="p-1.5">时间</th>
+            <th className="p-1.5">AI 备注</th>
+            <th className="p-1.5">操作</th>
           </tr>
         </thead>
         <tbody>
@@ -239,43 +212,32 @@ export default function MessagesPage() {
             const isRejected = m.status === "rejected";
             const isConfirming = confirmingDelete === m.id;
             return (
-              <tr key={m.id} style={isConfirming ? { background: "#fff4e5" } : undefined}>
-                <td style={{ padding: 6 }}>{m.content}</td>
-                <td style={{ padding: 6 }}>{m.authorName}</td>
-                <td style={{ padding: 6, color: isApproved ? "green" : isRejected ? "red" : "orange" }}>
+              <tr key={m.id} className={isConfirming ? "bg-[#fff4e5]" : undefined}>
+                <td className="p-1.5">{m.content}</td>
+                <td className="p-1.5">{m.authorName}</td>
+                <td className={`p-1.5 ${isApproved ? "text-green-600" : isRejected ? "text-red-600" : "text-orange-500"}`}>
                   {m.status}
                 </td>
-                <td style={{ padding: 6, color: m.isVisible ? "#444" : "#aaa" }}>
+                <td className={`p-1.5 ${m.isVisible ? "text-[#444]" : "text-[#aaa]"}`}>
                   {m.isVisible ? "显示中" : "已隐藏"}
                 </td>
-                <td style={{ padding: 6, fontSize: 12 }}>{new Date(m.createdAt).toLocaleString()}</td>
-                <td style={{ padding: 6, fontSize: 12, color: m.aiReason ? "#444" : "#bbb" }}>
+                <td className="p-1.5 text-xs">{new Date(m.createdAt).toLocaleString()}</td>
+                <td className={`p-1.5 text-xs ${m.aiReason ? "text-[#444]" : "text-[#bbb]"}`}>
                   {m.aiReason ?? "—"}
                 </td>
-                <td style={{ padding: 6, whiteSpace: "nowrap" }}>
+                <td className="p-1.5 whitespace-nowrap">
                   {isConfirming ? (
-                    <span style={{ color: "#c00", fontWeight: 600 }}>
+                    <span className="font-semibold text-[#c00]">
                       确认删除?
                       <button
                         onClick={() => deleteMessage(m.id)}
-                        style={{
-                          marginLeft: 6,
-                          color: "white",
-                          background: "#c00",
-                          border: "1px solid #a00",
-                          padding: "2px 8px",
-                          cursor: "pointer",
-                        }}
+                        className="ml-1.5 cursor-pointer border border-[#a00] bg-[#c00] px-2 py-0.5 text-white"
                       >
                         确认
                       </button>
                       <button
                         onClick={() => setConfirmingDelete(null)}
-                        style={{
-                          marginLeft: 4,
-                          padding: "2px 8px",
-                          cursor: "pointer",
-                        }}
+                        className="ml-1 cursor-pointer px-2 py-0.5"
                       >
                         取消
                       </button>
@@ -285,26 +247,26 @@ export default function MessagesPage() {
                       <button
                         onClick={() => review(m.id, "approved")}
                         disabled={isApproved}
-                        style={{ marginRight: 4 }}
+                        className="mr-1 disabled:text-[#aaa]"
                       >
                         通过
                       </button>
                       <button
                         onClick={() => review(m.id, "rejected")}
                         disabled={isRejected}
-                        style={{ marginRight: 8, color: isRejected ? "#aaa" : "red" }}
+                        className={`mr-2 ${isRejected ? "text-[#aaa]" : "text-red-600"}`}
                       >
                         拒绝
                       </button>
                       <button
                         onClick={() => setVisible(m.id, !m.isVisible)}
-                        style={{ marginRight: 4 }}
+                        className="mr-1"
                       >
                         {m.isVisible ? "隐藏" : "显示"}
                       </button>
                       <button
                         onClick={() => setConfirmingDelete(m.id)}
-                        style={{ color: "#c00" }}
+                        className="text-[#c00]"
                       >
                         删除
                       </button>
@@ -315,54 +277,27 @@ export default function MessagesPage() {
             );
           })}
           {messages.length === 0 && (
-            <tr><td colSpan={7} style={{ textAlign: "center", padding: 24, color: "#999" }}>暂无留言</td></tr>
+            <tr>
+              <td colSpan={7} className="p-6 text-center text-[#999]">暂无留言</td>
+            </tr>
           )}
         </tbody>
       </table>
 
-      <div
-        style={{
-          marginTop: 16,
-          display: "flex",
-          alignItems: "center",
-          gap: 12,
-          flexWrap: "wrap",
-          fontSize: 13,
-        }}
-      >
-        <span style={{ color: "#666" }}>
+      <div className="mt-4 flex flex-wrap items-center gap-3 text-[13px]">
+        <span className="text-[#666]">
           共 <strong>{total}</strong> 条 · 第 <strong>{page}</strong> / {totalPages} 页
         </span>
-        <button
-          onClick={() => setPage(1)}
-          disabled={page === 1}
-        >
-          首页
-        </button>
-        <button
-          onClick={() => setPage(p => Math.max(1, p - 1))}
-          disabled={page === 1}
-        >
-          上一页
-        </button>
-        <button
-          onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-          disabled={page >= totalPages}
-        >
-          下一页
-        </button>
-        <button
-          onClick={() => setPage(totalPages)}
-          disabled={page >= totalPages}
-        >
-          末页
-        </button>
-        <label style={{ marginLeft: "auto", color: "#666" }}>
+        <button onClick={() => setPage(1)} disabled={page === 1} className="disabled:opacity-50">首页</button>
+        <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="disabled:opacity-50">上一页</button>
+        <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="disabled:opacity-50">下一页</button>
+        <button onClick={() => setPage(totalPages)} disabled={page >= totalPages} className="disabled:opacity-50">末页</button>
+        <label className="ml-auto text-[#666]">
           每页
           <select
             value={pageSize}
             onChange={e => { setPageSize(Number(e.target.value)); setPage(1); }}
-            style={{ margin: "0 6px", padding: "2px 6px" }}
+            className="mx-1.5 px-1.5 py-0.5"
           >
             {PAGE_SIZE_OPTIONS.map(n => (
               <option key={n} value={n}>{n}</option>
