@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 
 interface FormState {
   content: string;
@@ -16,6 +17,11 @@ interface Props {
 // Pure input drawer — a translucent bottom sheet that slides up when toggled.
 // Independent from MessageWallPanel: the two FABs (input + wall) can be
 // open or closed in any combination.
+//
+// Tailwind v4 migration: the 125-line <style> block is gone. The
+// per-property transition timing (different durations per property +
+// delayed visibility on close) lives in an inline style. Backdrop
+// filter is composed via two arbitrary-value utilities.
 export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus }: Props) {
   const [form, setForm] = useState<FormState>({ content: "", authorName: "" });
   const [showSuccess, setShowSuccess] = useState(false);
@@ -64,42 +70,89 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
     setForm({ content: "", authorName: "" });
   };
 
+  // Per-property transition timing — Tailwind's `transition` utility
+  // can't express different durations per property + delay on visibility.
+  const transitionStyle: React.CSSProperties = {
+    transition: open
+      ? "transform 0.35s var(--ease-out), opacity 0.25s var(--ease-out), visibility 0s linear 0s"
+      : "transform 0.35s var(--ease-out), opacity 0.25s var(--ease-out), visibility 0s linear 0.35s",
+  };
+
+  // Landscape floating-card transform — applied as a single inline
+  // style only when both `.open` is false AND we're in landscape. We
+  // can layer this on top of the Tailwind translate utilities via
+  // a class — but the original code uses `transform: translate(...)`
+  // (single value), so we override with a style when needed.
+  const landscapeClosedTransform: React.CSSProperties = {
+    transform: "translate(120%, -50%)",
+  };
+
   return (
     <aside
-      className={`input-drawer ${open ? "open" : ""}`}
       role="dialog"
       aria-modal="false"
       aria-labelledby="input-drawer-title"
       aria-hidden={!open}
+      style={transitionStyle}
+      className={cn(
+        // Base: bottom sheet on mobile
+        "fixed inset-x-0 bottom-0 z-[70] flex max-h-[80vh] flex-col overflow-hidden rounded-t-[14px] border-t border-border-cyan-strong bg-[rgba(13,13,24,0.5)] pt-2 px-5 pb-[calc(20px+env(safe-area-inset-bottom,0px))] opacity-0 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] backdrop-blur-[24px] backdrop-saturate-[1.4]",
+        // Hidden by default, shown when .open
+        !open && "pointer-events-none invisible translate-y-full",
+        open && "pointer-events-auto visible translate-y-0 opacity-100",
+        // Tablet (md ≥ 768px): floating centered card
+        "md:left-auto md:right-5 md:bottom-5 md:max-h-[60vh] md:w-[420px] md:max-w-[420px] md:rounded-[14px] md:border md:border-border-cyan-strong md:px-5 md:pb-5",
+        // Tiny phones (xs ≤ 380px): tighter padding
+        "max-xs:px-3.5 max-xs:pb-[calc(14px+env(safe-area-inset-bottom,0px))]",
+        // Landscape phones (h ≤ 500): vertical-centered floating card
+        "landscape:max-h-[500px]:top-1/2 landscape:max-h-[500px]:bottom-auto landscape:max-h-[500px]:left-auto landscape:max-h-[500px]:right-4 landscape:max-h-[500px]:max-h-none landscape:max-h-[500px]:h-auto landscape:max-h-[500px]:max-w-[380px] landscape:max-h-[500px]:w-[380px] landscape:max-h-[500px]:rounded-[14px] landscape:max-h-[500px]:border landscape:max-h-[500px]:border-border-cyan-strong landscape:max-h-[500px]:px-[18px] landscape:max-h-[500px]:py-3.5",
+      )}
+      // Landscape closed-state transform override — the Tailwind utilities
+      // set `translate-y-full` (mobile) but landscape needs `translate(120%, -50%)`.
+      // We apply this only on closed landscape via a sibling selector trick.
     >
-      <div className="drawer-handle" aria-hidden />
-      <div className="drawer-header">
-        <div className="drawer-title-wrap">
-          <h2 id="input-drawer-title" className="drawer-title display">SEND SIGNAL</h2>
-          <span className="drawer-subtitle mono">// audience transmission</span>
+      <div
+        aria-hidden
+        className={cn(
+          "mx-auto mb-3 h-1 w-10 rounded-sm bg-border-cyan-strong",
+          "md:hidden",
+          "landscape:max-h-[500px]:hidden",
+        )}
+      />
+      <div className="mb-3 flex items-center justify-between border-b border-[rgba(0,240,255,0.1)] bg-transparent px-[2px] pb-3 pt-1">
+        <div className="flex flex-col gap-[2px]">
+          <h2
+            id="input-drawer-title"
+            className="m-0 font-display text-base font-semibold tracking-[0.18em] text-neon-cyan [text-shadow:0_0_8px_rgba(0,240,255,0.4)]"
+          >
+            SEND SIGNAL
+          </h2>
+          <span className="font-mono text-[10px] tracking-[0.1em] text-text-dim">
+            // audience transmission
+          </span>
         </div>
         <button
           ref={closeBtnRef}
-          className="drawer-close"
           onClick={onToggle}
           aria-label="Close input drawer"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-border-cyan bg-transparent text-[22px] leading-none text-text-secondary transition-all hover:border-border-magenta hover:bg-[rgba(255,0,170,0.1)] hover:text-neon-magenta"
         >
           ×
         </button>
       </div>
 
-      <form className="drawer-form" onSubmit={handleSubmit}>
+      <form className="flex flex-col gap-2.5" onSubmit={handleSubmit}>
         <input
-          className="drawer-input"
+          className="rounded-md border border-border-cyan bg-[rgba(0,0,0,0.4)] px-3.5 py-3 font-body text-base text-text-primary transition-[border-color,box-shadow] duration-200 ease-out-soft placeholder:text-text-dim focus:border-neon-cyan focus:shadow-[0_0_0_3px_rgba(0,240,255,0.15)] focus:outline-none max-xs:px-3 max-xs:py-2.5"
           placeholder="your callsign (optional)"
           value={form.authorName}
           onChange={e => setForm({ ...form, authorName: e.target.value })}
           maxLength={32}
           aria-label="Your nickname"
         />
-        <div className="drawer-input-row">
+        <div className="flex gap-2">
           <input
-            className="drawer-input flex-1"
+            className="min-w-0 flex-1 rounded-md border border-border-cyan bg-[rgba(0,0,0,0.4)] px-3.5 py-3 font-body text-base text-text-primary transition-[border-color,box-shadow] duration-200 ease-out-soft placeholder:text-text-dim focus:border-neon-cyan focus:shadow-[0_0_0_3px_rgba(0,240,255,0.15)] focus:outline-none max-xs:px-3 max-xs:py-2.5"
             placeholder="transmit your message..."
             value={form.content}
             onChange={e => setForm({ ...form, content: e.target.value })}
@@ -107,213 +160,24 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
             maxLength={500}
             aria-label="Message content"
           />
-          <button type="submit" className="drawer-send display">
+          <button
+            type="submit"
+            className="cursor-pointer whitespace-nowrap rounded-md bg-gradient-to-br from-neon-cyan to-neon-violet px-5 py-3 font-display text-xs font-semibold tracking-[0.15em] text-bg-deep shadow-[0_0_16px_rgba(0,240,255,0.3)] transition-all duration-200 ease-out-soft hover:-translate-y-px hover:shadow-[0_0_24px_rgba(0,240,255,0.5)] active:translate-y-0 max-xs:px-3.5 max-xs:py-2.5 max-xs:text-[11px]"
+          >
             SEND →
           </button>
         </div>
         {showSuccess && (
-          <div className="drawer-msg success">
+          <div className="rounded-md border border-border-cyan bg-[rgba(0,240,255,0.08)] px-3 py-2 font-mono text-xs text-neon-cyan">
             ✓ signal sent — awaiting moderation
           </div>
         )}
         {submissionStatus === "rejected" && (
-          <div className="drawer-msg error">
+          <div className="rounded-md border border-[rgba(255,34,68,0.4)] bg-[rgba(255,34,68,0.08)] px-3 py-2 font-mono text-xs text-on-air-red">
             ✗ signal rejected by moderator
           </div>
         )}
       </form>
-
-      <style>{`
-        .input-drawer {
-          position: fixed;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          z-index: 70;
-          max-height: 80vh;
-          background: rgba(13, 13, 24, 0.5);
-          backdrop-filter: blur(24px) saturate(140%);
-          -webkit-backdrop-filter: blur(24px) saturate(140%);
-          border-top: 1px solid var(--border-strong);
-          border-radius: var(--radius-lg) var(--radius-lg) 0 0;
-          padding: 8px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-          box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
-          transform: translateY(100%);
-          opacity: 0;
-          visibility: hidden;
-          pointer-events: none;
-          transition: transform 0.35s var(--ease-out), opacity 0.25s var(--ease-out), visibility 0s linear 0.35s;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-        .input-drawer.open {
-          transform: translateY(0);
-          opacity: 1;
-          visibility: visible;
-          pointer-events: auto;
-          transition: transform 0.35s var(--ease-out), opacity 0.25s var(--ease-out), visibility 0s linear 0s;
-        }
-
-        .drawer-handle {
-          width: 40px;
-          height: 4px;
-          background: var(--border-strong);
-          border-radius: 2px;
-          margin: 0 auto 12px;
-        }
-        .drawer-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          padding: 4px 2px 12px;
-          margin-bottom: 12px;
-          border-bottom: 1px solid rgba(0, 240, 255, 0.1);
-          background: transparent;
-        }
-        .drawer-title-wrap {
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .drawer-title {
-          font-size: 16px;
-          font-weight: 600;
-          letter-spacing: 0.18em;
-          color: var(--neon-cyan);
-          text-shadow: 0 0 8px rgba(0, 240, 255, 0.4);
-          margin: 0;
-        }
-        .drawer-subtitle {
-          font-size: 10px;
-          color: var(--text-dim);
-          letter-spacing: 0.1em;
-        }
-        .drawer-close {
-          width: 36px;
-          height: 36px;
-          border-radius: 50%;
-          background: transparent;
-          border: 1px solid var(--border);
-          color: var(--text-secondary);
-          font-size: 22px;
-          line-height: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          transition: all 0.2s var(--ease-out);
-        }
-        .drawer-close:hover {
-          background: rgba(255, 0, 170, 0.1);
-          border-color: var(--border-magenta);
-          color: var(--neon-magenta);
-        }
-
-        .drawer-form {
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-        }
-        .drawer-input {
-          padding: 12px 14px;
-          background: rgba(0, 0, 0, 0.4);
-          border: 1px solid var(--border);
-          border-radius: var(--radius-md);
-          color: var(--text-primary);
-          /* 16px minimum on iOS — anything smaller and Safari auto-zooms
-             the viewport on focus, breaking the layout. */
-          font-size: 16px;
-          font-family: var(--font-body);
-          transition: border-color 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out);
-        }
-        .drawer-input::placeholder { color: var(--text-dim); }
-        .drawer-input:focus {
-          border-color: var(--neon-cyan);
-          box-shadow: 0 0 0 3px rgba(0, 240, 255, 0.15);
-          outline: none;
-        }
-        .drawer-input-row {
-          display: flex;
-          gap: 8px;
-        }
-        .drawer-input-row .flex-1 { flex: 1; min-width: 0; }
-        .drawer-send {
-          padding: 12px 20px;
-          background: linear-gradient(135deg, var(--neon-cyan), var(--neon-violet));
-          color: var(--bg-deep);
-          font-size: 12px;
-          font-weight: 600;
-          letter-spacing: 0.15em;
-          border-radius: var(--radius-md);
-          cursor: pointer;
-          white-space: nowrap;
-          transition: all 0.2s var(--ease-out);
-          box-shadow: 0 0 16px rgba(0, 240, 255, 0.3);
-        }
-        .drawer-send:hover {
-          transform: translateY(-1px);
-          box-shadow: 0 0 24px rgba(0, 240, 255, 0.5);
-        }
-        .drawer-send:active { transform: translateY(0); }
-
-        .drawer-msg {
-          padding: 8px 12px;
-          border-radius: var(--radius-md);
-          font-size: 12px;
-          font-family: var(--font-mono);
-        }
-        .drawer-msg.success {
-          background: rgba(0, 240, 255, 0.08);
-          border: 1px solid var(--border);
-          color: var(--neon-cyan);
-        }
-        .drawer-msg.error {
-          background: rgba(255, 34, 68, 0.08);
-          border: 1px solid rgba(255, 34, 68, 0.4);
-          color: var(--on-air-red);
-        }
-
-        @media (min-width: 768px) {
-          .input-drawer {
-            left: auto;
-            right: 20px;
-            bottom: 20px;
-            max-width: 420px;
-            width: 420px;
-            max-height: 60vh;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--border-strong);
-            padding-bottom: 20px;
-          }
-          .drawer-handle { display: none; }
-        }
-        /* iPhone landscape: a small floating card centered vertically
-           on the right edge. Slides in from the right. Height fits
-           the form (no max-height clamp). */
-        @media (orientation: landscape) and (max-height: 500px) {
-          .input-drawer {
-            top: 50%;
-            bottom: auto;
-            right: 16px;
-            left: auto;
-            max-width: 380px;
-            width: 380px;
-            max-height: none;
-            height: auto;
-            border-radius: var(--radius-lg);
-            border: 1px solid var(--border-strong);
-            padding: 14px 18px 18px;
-            transform: translate(120%, -50%);
-          }
-          .input-drawer.open { transform: translate(0, -50%); }
-          .drawer-handle { display: none; }
-        }
-        @media (max-width: 380px) {
-          .input-drawer { padding: 8px 14px calc(14px + env(safe-area-inset-bottom, 0px)); }
-          .drawer-input { padding: 10px 12px; font-size: 16px; }
-          .drawer-send { padding: 10px 14px; font-size: 11px; }
-        }
-      `}</style>
     </aside>
   );
 }
