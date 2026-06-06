@@ -52,49 +52,6 @@ interface Stats {
   lastFetchedAt: string | null;
 }
 
-const S = {
-  section: { marginBottom: 32 },
-  h2: { fontFamily: "'Oswald', sans-serif", fontSize: 16, marginBottom: 12, letterSpacing: 1, color: "#e8a84c" },
-  input: {
-    display: "block",
-    width: "100%",
-    maxWidth: 480,
-    padding: "8px 10px",
-    background: "#0f0f14",
-    border: "1px solid #2a2a32",
-    borderRadius: 4,
-    color: "#e8e6e0",
-    fontSize: 13,
-    marginBottom: 8,
-  } as React.CSSProperties,
-  btn: {
-    padding: "6px 14px",
-    background: "#e8a84c",
-    color: "#0a0a0c",
-    border: "none",
-    borderRadius: 4,
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: 12,
-    marginRight: 8,
-  } as React.CSSProperties,
-  btnSecondary: {
-    padding: "6px 14px",
-    background: "#2a2a32",
-    color: "#e8e6e0",
-    border: "none",
-    borderRadius: 4,
-    cursor: "pointer",
-    fontSize: 12,
-    marginRight: 8,
-  } as React.CSSProperties,
-  table: { width: "100%", borderCollapse: "collapse", fontSize: 12 } as React.CSSProperties,
-  th: { textAlign: "left", padding: "8px 10px", borderBottom: "1px solid #2a2a32", color: "#9a958c" } as React.CSSProperties,
-  td: { padding: "8px 10px", borderBottom: "1px solid #1a1a20", color: "#e8e6e0" } as React.CSSProperties,
-  statusActive: { color: "#7ed87e" },
-  statusDisabled: { color: "#d87e7e" },
-};
-
 export default function NewsPage() {
   const [sources, setSources] = useState<RssSource[]>([]);
   const [cfg, setCfg] = useState<NewsConfig | null>(null);
@@ -217,123 +174,119 @@ export default function NewsPage() {
     }
   }
 
+  // Tailwind v4 migration: 44 style={{}} props + a 7-entry modalStyles
+  // object replaced with shared local className strings. The S.input
+  // (block w-full max-w-480 bg-deep border rounded) was used 15+ times
+  // across form inputs, the modal password field, and Field/Stat
+  // sub-components. Per-cell status colors composed inline.
+
+  const inputClass = "mb-2 block w-full max-w-[480px] rounded border border-[#2a2a32] bg-[#0f0f14] px-2.5 py-2 text-[13px] text-[#e8e6e0]";
+  const btnClass = "mr-2 cursor-pointer rounded border-0 bg-[#e8a84c] px-3.5 py-1.5 text-xs font-semibold text-[#0a0a0c]";
+  const btnSecondaryClass = "mr-2 cursor-pointer rounded border-0 bg-[#2a2a32] px-3.5 py-1.5 text-xs text-[#e8e6e0]";
+  const fieldLabelClass = "mb-1 block text-[11px] text-[#9a958c]";
+  const statusActiveClass = "text-[#7ed87e]";
+  const statusDisabledClass = "text-[#d87e7e]";
+  const sectionClass = "mb-8";
+  const h2Class = "mb-3 font-display text-base tracking-[1px] text-[#e8a84c]";
+
   return (
     <div>
-      <h1 style={{ fontFamily: "'Oswald', sans-serif", fontSize: 22, marginBottom: 20, letterSpacing: 1 }}>
-        资讯源管理
-      </h1>
+      <h1 className="mb-5 font-display text-[22px] tracking-[1px]">资讯源管理</h1>
 
-      <section style={S.section}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-          <h2 style={{ ...S.h2, marginBottom: 0 }}>
+      <section className={sectionClass}>
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className={`${h2Class} mb-0`}>
             RSS 源列表
-            <span style={{ color: "#5a5850", fontSize: 11, marginLeft: 8, letterSpacing: 0 }}>
+            <span className="ml-2 text-[11px] tracking-normal text-[#5a5850]">
               （共 {sources.length} 条）
             </span>
           </h2>
           <button
-            style={S.btnSecondary}
+            className={btnSecondaryClass}
             onClick={() => setSourcesCollapsed((v) => !v)}
             title={sourcesCollapsed ? "展开" : "折叠"}
           >
             {sourcesCollapsed ? "▼ 展开" : "▲ 折叠"}
           </button>
         </div>
-        <div style={{ marginBottom: 12 }}>
-          <label style={S.btn as React.CSSProperties}>
+        <div className="mb-3">
+          <label className={btnClass}>
             上传 OPML 文件
-            <input type="file" accept=".opml,.xml" onChange={handleOpmlUpload} style={{ display: "none" }} />
+            <input type="file" accept=".opml,.xml" onChange={handleOpmlUpload} className="hidden" />
           </label>
-          <button style={S.btnSecondary} onClick={refreshAll} disabled={refreshing}>
+          <button className={btnSecondaryClass} onClick={refreshAll} disabled={refreshing}>
             {refreshing ? "刷新中..." : "立即刷新全部"}
           </button>
-          {opmlError && <span style={{ color: "#d87e7e", marginLeft: 12, fontSize: 12 }}>{opmlError}</span>}
-          {opmlInfo && <span style={{ color: "#7ed87e", marginLeft: 12, fontSize: 12 }}>{opmlInfo}</span>}
+          {opmlError && <span className="ml-3 text-xs text-[#d87e7e]">{opmlError}</span>}
+          {opmlInfo && <span className="ml-3 text-xs text-[#7ed87e]">{opmlInfo}</span>}
         </div>
 
-        <form onSubmit={addManualUrl} style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
+        <form onSubmit={addManualUrl} className="mb-3 flex items-center gap-2">
           <input
+            className={`${inputClass} mb-0 flex-[2]`}
             placeholder="Feed URL"
             value={manualUrl}
             onChange={(e) => setManualUrl(e.target.value)}
-            style={{ ...S.input, marginBottom: 0, flex: 2 }}
           />
           <input
+            className={`${inputClass} mb-0 flex-1`}
             placeholder="标题（可选）"
             value={manualTitle}
             onChange={(e) => setManualTitle(e.target.value)}
-            style={{ ...S.input, marginBottom: 0, flex: 1 }}
           />
-          <button type="submit" style={S.btn}>
-            添加
-          </button>
+          <button type="submit" className={btnClass}>添加</button>
         </form>
 
         {sourcesCollapsed ? (
-          <div
-            style={{
-              padding: 16,
-              background: "#0f0f14",
-              border: "1px dashed #2a2a32",
-              borderRadius: 4,
-              textAlign: "center",
-              color: "#5a5850",
-              fontSize: 12,
-            }}
-          >
+          <div className="rounded border border-dashed border-[#2a2a32] bg-[#0f0f14] p-4 text-center text-xs text-[#5a5850]">
             列表已折叠（{sources.length} 条）— 点击右上角按钮展开
           </div>
         ) : (
           <>
-            <table style={S.table}>
+            <table className="w-full border-collapse text-xs">
               <thead>
                 <tr>
-                  <th style={S.th}>URL / 标题</th>
-                  <th style={S.th}>状态</th>
-                  <th style={S.th}>失败次数</th>
-                  <th style={S.th}>Items</th>
-                  <th style={S.th}>最后抓取</th>
-                  <th style={S.th}>操作</th>
+                  <th className="border-b border-[#2a2a32] px-2.5 py-2 text-left text-[#9a958c]">URL / 标题</th>
+                  <th className="border-b border-[#2a2a32] px-2.5 py-2 text-left text-[#9a958c]">状态</th>
+                  <th className="border-b border-[#2a2a32] px-2.5 py-2 text-left text-[#9a958c]">失败次数</th>
+                  <th className="border-b border-[#2a2a32] px-2.5 py-2 text-left text-[#9a958c]">Items</th>
+                  <th className="border-b border-[#2a2a32] px-2.5 py-2 text-left text-[#9a958c]">最后抓取</th>
+                  <th className="border-b border-[#2a2a32] px-2.5 py-2 text-left text-[#9a958c]">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {sources.length === 0 && (
                   <tr>
-                    <td colSpan={6} style={{ ...S.td, color: "#5a5850", textAlign: "center" }}>
+                    <td colSpan={6} className="border-b border-[#1a1a20] px-2.5 py-2 text-center text-[#5a5850]">
                       暂无源，请上传 OPML 或手动添加
                     </td>
                   </tr>
                 )}
                 {sources.map((s) => (
                   <tr key={s.id}>
-                    <td style={S.td}>
+                    <td className="border-b border-[#1a1a20] px-2.5 py-2 text-[#e8e6e0]">
                       <div>
                         <a
                           onClick={() => openItemsModal(s.id)}
-                          style={{
-                            cursor: "pointer",
-                            color: "#e8a84c",
-                            textDecoration: "underline",
-                            textDecorationStyle: "dotted",
-                          }}
+                          className="cursor-pointer text-[#e8a84c] [text-decoration:underline_dotted]"
                           title="点击查看该源的 items 内容"
                         >
                           {s.title || s.text || "(无标题)"}
                         </a>
                       </div>
-                      <div style={{ color: "#5a5850", fontSize: 11, marginTop: 2 }}>{s.url}</div>
+                      <div className="mt-0.5 text-[11px] text-[#5a5850]">{s.url}</div>
                     </td>
-                    <td style={{ ...S.td, ...(s.status === "active" ? S.statusActive : S.statusDisabled) }}>
+                    <td className={`border-b border-[#1a1a20] px-2.5 py-2 ${s.status === "active" ? statusActiveClass : statusDisabledClass}`}>
                       {s.status}
                     </td>
-                    <td style={S.td}>{s.failCount}</td>
-                    <td style={S.td}>{s._count?.items ?? 0}</td>
-                    <td style={S.td}>{s.lastFetchedAt ? new Date(s.lastFetchedAt).toLocaleString() : "-"}</td>
-                    <td style={S.td}>
-                      <button style={S.btnSecondary} onClick={() => toggleSource(s.id)}>
+                    <td className="border-b border-[#1a1a20] px-2.5 py-2 text-[#e8e6e0]">{s.failCount}</td>
+                    <td className="border-b border-[#1a1a20] px-2.5 py-2 text-[#e8e6e0]">{s._count?.items ?? 0}</td>
+                    <td className="border-b border-[#1a1a20] px-2.5 py-2 text-[#e8e6e0]">{s.lastFetchedAt ? new Date(s.lastFetchedAt).toLocaleString() : "-"}</td>
+                    <td className="border-b border-[#1a1a20] px-2.5 py-2 text-[#e8e6e0]">
+                      <button className={btnSecondaryClass} onClick={() => toggleSource(s.id)}>
                         {s.status === "active" ? "禁用" : "启用"}
                       </button>
-                      <button style={S.btnSecondary} onClick={() => deleteSource(s.id)}>
+                      <button className={btnSecondaryClass} onClick={() => deleteSource(s.id)}>
                         删除
                       </button>
                     </td>
@@ -342,8 +295,8 @@ export default function NewsPage() {
               </tbody>
             </table>
             {sources.length > 10 && (
-              <div style={{ marginTop: 12, textAlign: "right" }}>
-                <button style={S.btnSecondary} onClick={() => setSourcesCollapsed(true)}>
+              <div className="mt-3 text-right">
+                <button className={btnSecondaryClass} onClick={() => setSourcesCollapsed(true)}>
                   ▲ 折叠列表
                 </button>
               </div>
@@ -352,74 +305,37 @@ export default function NewsPage() {
         )}
       </section>
 
-      <section style={S.section}>
-        <h2 style={S.h2}>系统配置</h2>
+      <section className={sectionClass}>
+        <h2 className={h2Class}>系统配置</h2>
         {form ? (
           <form onSubmit={saveConfig}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, maxWidth: 720 }}>
-              <Field
-                label="决策 LLM 预取频率 (ms)"
-                value={form.prefetchIntervalMs}
-                onChange={(v) => setForm({ ...form, prefetchIntervalMs: v })}
-              />
-              <Field
-                label="RSS 抓取频率 (ms)"
-                value={form.updateIntervalMs}
-                onChange={(v) => setForm({ ...form, updateIntervalMs: v })}
-              />
-              <Field
-                label="资讯源有效窗口 (ms)"
-                value={form.activeWindowMs}
-                onChange={(v) => setForm({ ...form, activeWindowMs: v })}
-              />
-              <Field
-                label="Item 保留天数"
-                value={form.retentionDays}
-                onChange={(v) => setForm({ ...form, retentionDays: v })}
-              />
-              <Field
-                label="RSS 并发抓取数"
-                value={form.maxConcurrentFetches}
-                onChange={(v) => setForm({ ...form, maxConcurrentFetches: v })}
-              />
-              <Field
-                label="决策 LLM 模型名（空=回退主 LLM）"
-                value={form.decisionModelName}
-                onChange={(v) => setForm({ ...form, decisionModelName: v })}
-                type="text"
-              />
-              <Field
-                label="资讯条数上限（{{news}} 最多渲染几条）"
-                value={form.maxNewsItems}
-                onChange={(v) => setForm({ ...form, maxNewsItems: v })}
-              />
-              <Field
-                label="单条字符上限（超出截断）"
-                value={form.maxItemChars}
-                onChange={(v) => setForm({ ...form, maxItemChars: v })}
-              />
-              <Field
-                label="总字符上限（整体截断）"
-                value={form.maxTotalChars}
-                onChange={(v) => setForm({ ...form, maxTotalChars: v })}
-              />
+            <div className="mb-3 grid max-w-[720px] grid-cols-1 gap-3 sm:grid-cols-2">
+              <Field label="决策 LLM 预取频率 (ms)" value={form.prefetchIntervalMs} onChange={(v) => setForm({ ...form, prefetchIntervalMs: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="RSS 抓取频率 (ms)" value={form.updateIntervalMs} onChange={(v) => setForm({ ...form, updateIntervalMs: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="资讯源有效窗口 (ms)" value={form.activeWindowMs} onChange={(v) => setForm({ ...form, activeWindowMs: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="Item 保留天数" value={form.retentionDays} onChange={(v) => setForm({ ...form, retentionDays: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="RSS 并发抓取数" value={form.maxConcurrentFetches} onChange={(v) => setForm({ ...form, maxConcurrentFetches: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="决策 LLM 模型名（空=回退主 LLM）" value={form.decisionModelName} onChange={(v) => setForm({ ...form, decisionModelName: v })} type="text" inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="资讯条数上限（{{news}} 最多渲染几条）" value={form.maxNewsItems} onChange={(v) => setForm({ ...form, maxNewsItems: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="单条字符上限（超出截断）" value={form.maxItemChars} onChange={(v) => setForm({ ...form, maxItemChars: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="总字符上限（整体截断）" value={form.maxTotalChars} onChange={(v) => setForm({ ...form, maxTotalChars: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
             </div>
-            <h3 style={{ fontSize: 13, marginTop: 20, marginBottom: 8, color: "#9a958c" }}>Tavily 配置</h3>
-            <div style={{ marginBottom: 8 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#9a958c", marginBottom: 4 }}>API Key</label>
+            <h3 className="mb-2 mt-5 text-[13px] text-[#9a958c]">Tavily 配置</h3>
+            <div className="mb-2">
+              <label className={fieldLabelClass}>API Key</label>
               <input
                 type="password"
                 value={form.tavilyApiKey}
                 onChange={(e) => setForm({ ...form, tavilyApiKey: e.target.value })}
-                style={S.input}
+                className={inputClass}
               />
             </div>
-            <div style={{ marginBottom: 12 }}>
-              <label style={{ display: "block", fontSize: 11, color: "#9a958c", marginBottom: 4 }}>时间范围</label>
+            <div className="mb-3">
+              <label className={fieldLabelClass}>时间范围</label>
               <select
                 value={form.tavilyTimeRange}
                 onChange={(e) => setForm({ ...form, tavilyTimeRange: e.target.value as NewsConfig["tavilyTimeRange"] })}
-                style={S.input}
+                className={inputClass}
               >
                 <option value="d">最近 1 天 (d)</option>
                 <option value="w">最近 1 周 (w)</option>
@@ -427,19 +343,17 @@ export default function NewsPage() {
                 <option value="y">最近 1 年 (y)</option>
               </select>
             </div>
-            <button type="submit" style={S.btn}>
-              保存
-            </button>
+            <button type="submit" className={btnClass}>保存</button>
           </form>
         ) : (
-          <div style={{ color: "#5a5850", fontSize: 12 }}>加载中...</div>
+          <div className="text-xs text-[#5a5850]">加载中...</div>
         )}
       </section>
 
-      <section style={S.section}>
-        <h2 style={S.h2}>实时统计</h2>
+      <section className={sectionClass}>
+        <h2 className={h2Class}>实时统计</h2>
         {stats ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, maxWidth: 720 }}>
+          <div className="grid max-w-[720px] grid-cols-2 gap-3 sm:grid-cols-5">
             <Stat label="总源数" value={stats.sourcesTotal} />
             <Stat label="Active" value={stats.sourcesActive} color="#7ed87e" />
             <Stat label="Disabled" value={stats.sourcesDisabled} color="#d87e7e" />
@@ -451,60 +365,60 @@ export default function NewsPage() {
             />
           </div>
         ) : (
-          <div style={{ color: "#5a5850", fontSize: 12 }}>加载中...</div>
+          <div className="text-xs text-[#5a5850]">加载中...</div>
         )}
       </section>
 
       {itemsLoading && !itemsModal && (
-        <div style={modalStyles.backdrop}>
-          <div style={{ ...modalStyles.box, padding: 32, textAlign: "center", color: "#9a958c" }}>加载中...</div>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(0,0,0,0.7)] p-5">
+          <div className="rounded-md border border-[#2a2a32] bg-[#1a1a20] p-8 text-center text-[#9a958c] shadow-[0_8px_40px_rgba(0,0,0,0.6)]">加载中...</div>
         </div>
       )}
 
       {itemsModal && (
-        <div style={modalStyles.backdrop} onClick={() => setItemsModal(null)}>
-          <div style={modalStyles.box} onClick={(e) => e.stopPropagation()}>
-            <div style={modalStyles.header}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, color: "#e8a84c", fontFamily: "'Oswald', sans-serif", letterSpacing: 1 }}>
+        <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[rgba(0,0,0,0.7)] p-5" onClick={() => setItemsModal(null)}>
+          <div className="flex w-full max-w-[900px] max-h-[85vh] flex-col rounded-md border border-[#2a2a32] bg-[#1a1a20] shadow-[0_8px_40px_rgba(0,0,0,0.6)]" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3 border-b border-[#2a2a32] px-5 py-4">
+              <div className="min-w-0 flex-1">
+                <div className="font-display text-sm tracking-[1px] text-[#e8a84c]">
                   {itemsModal.source.title || "(无标题)"}
                 </div>
-                <div style={{ fontSize: 11, color: "#5a5850", marginTop: 4, wordBreak: "break-all" }}>
+                <div className="mt-1 text-[11px] text-[#5a5850] [word-break:break-all]">
                   {itemsModal.source.url}
                 </div>
-                <div style={{ fontSize: 11, color: "#9a958c", marginTop: 4 }}>
-                  状态: <span style={itemsModal.source.status === "active" ? S.statusActive : S.statusDisabled}>
+                <div className="mt-1 text-[11px] text-[#9a958c]">
+                  状态: <span className={itemsModal.source.status === "active" ? statusActiveClass : statusDisabledClass}>
                     {itemsModal.source.status}
                   </span>
                   {" · "}共 {itemsModal.total} 条 items
                 </div>
               </div>
-              <button style={S.btnSecondary} onClick={() => setItemsModal(null)}>
+              <button className={btnSecondaryClass} onClick={() => setItemsModal(null)}>
                 关闭 ✕
               </button>
             </div>
 
-            <div style={modalStyles.body}>
+            <div className="flex-1 overflow-y-auto pt-2 px-5 pb-4">
               {itemsModal.items.length === 0 ? (
-                <div style={{ padding: 24, textAlign: "center", color: "#5a5850", fontSize: 12 }}>
+                <div className="p-6 text-center text-xs text-[#5a5850]">
                   暂无 items（可能从未抓取，或源已禁用）
                 </div>
               ) : (
-                <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+                <ul className="m-0 list-none p-0">
                   {itemsModal.items.map((it) => {
                     const expanded = expandedItemId === it.id;
                     return (
-                      <li key={it.id} style={modalStyles.item}>
+                      <li key={it.id} className="border-b border-[#1a1a20] py-2.5">
                         <div
-                          style={{ cursor: "pointer", display: "flex", alignItems: "flex-start", gap: 8 }}
+                          className="flex cursor-pointer items-start gap-2"
                           onClick={() => setExpandedItemId(expanded ? null : it.id)}
                         >
-                          <span style={{ color: "#e8a84c", fontSize: 11, marginTop: 2 }}>
+                          <span className="mt-0.5 text-[11px] text-[#e8a84c]">
                             {expanded ? "▼" : "▶"}
                           </span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: "#e8e6e0" }}>{it.title || "(无标题)"}</div>
-                            <div style={{ fontSize: 11, color: "#5a5850", marginTop: 2 }}>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-[13px] text-[#e8e6e0]">{it.title || "(无标题)"}</div>
+                            <div className="mt-0.5 text-[11px] text-[#5a5850]">
                               {it.publishedAt ? new Date(it.publishedAt).toLocaleString() : "(无发布时间)"}
                               {" · 抓取于 "}
                               {new Date(it.fetchedAt).toLocaleString()}
@@ -512,19 +426,19 @@ export default function NewsPage() {
                           </div>
                         </div>
                         {expanded && (
-                          <div style={modalStyles.itemBody}>
+                          <div className="ml-5 mt-2 rounded border border-[#2a2a32] bg-[#0f0f14] p-3">
                             {it.description && (
-                              <div style={{ fontSize: 12, color: "#9a958c", marginBottom: 8, fontStyle: "italic" }}>
+                              <div className="mb-2 text-xs italic text-[#9a958c]">
                                 {it.description}
                               </div>
                             )}
-                            <pre style={modalStyles.contentPre}>{it.contentMd || "(无正文)"}</pre>
+                            <pre className="m-0 max-h-80 overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs leading-[1.5] text-[#e8e6e0]">{it.contentMd || "(无正文)"}</pre>
                             {it.link && (
                               <a
                                 href={it.link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                style={{ fontSize: 11, color: "#e8a84c", marginTop: 8, display: "inline-block" }}
+                                className="mt-2 inline-block text-[11px] text-[#e8a84c]"
                               >
                                 打开原文 ↗
                               </a>
@@ -544,84 +458,29 @@ export default function NewsPage() {
   );
 }
 
-const modalStyles = {
-  backdrop: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.7)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 1000,
-    padding: 20,
-  } as React.CSSProperties,
-  box: {
-    background: "#1a1a20",
-    border: "1px solid #2a2a32",
-    borderRadius: 6,
-    width: "100%",
-    maxWidth: 900,
-    maxHeight: "85vh",
-    display: "flex",
-    flexDirection: "column",
-    boxShadow: "0 8px 40px rgba(0,0,0,0.6)",
-  } as React.CSSProperties,
-  header: {
-    display: "flex",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: "16px 20px",
-    borderBottom: "1px solid #2a2a32",
-  } as React.CSSProperties,
-  body: {
-    flex: 1,
-    overflowY: "auto",
-    padding: "8px 20px 16px 20px",
-  } as React.CSSProperties,
-  item: {
-    padding: "10px 0",
-    borderBottom: "1px solid #1a1a20",
-  } as React.CSSProperties,
-  itemBody: {
-    marginTop: 8,
-    marginLeft: 20,
-    padding: 12,
-    background: "#0f0f14",
-    borderRadius: 4,
-    border: "1px solid #2a2a32",
-  } as React.CSSProperties,
-  contentPre: {
-    fontSize: 12,
-    color: "#e8e6e0",
-    fontFamily: "'Consolas', 'Monaco', monospace",
-    whiteSpace: "pre-wrap" as const,
-    wordBreak: "break-word" as const,
-    margin: 0,
-    maxHeight: 320,
-    overflowY: "auto" as const,
-    lineHeight: 1.5,
-  } as React.CSSProperties,
-};
-
 function Field({
   label,
   value,
   onChange,
   type = "number",
+  inputClass,
+  fieldLabelClass,
 }: {
   label: string;
   value: string | number;
   onChange: (v: any) => void;
   type?: "number" | "text";
+  inputClass: string;
+  fieldLabelClass: string;
 }) {
   return (
     <div>
-      <label style={{ display: "block", fontSize: 11, color: "#9a958c", marginBottom: 4 }}>{label}</label>
+      <label className={fieldLabelClass}>{label}</label>
       <input
         type={type}
         value={value}
         onChange={(e) => onChange(type === "number" ? Number(e.target.value) : e.target.value)}
-        style={S.input}
+        className={inputClass}
       />
     </div>
   );
@@ -629,9 +488,12 @@ function Field({
 
 function Stat({ label, value, color, small }: { label: string; value: string | number; color?: string; small?: boolean }) {
   return (
-    <div style={{ padding: 12, background: "#0f0f14", border: "1px solid #2a2a32", borderRadius: 4 }}>
-      <div style={{ fontSize: 11, color: "#9a958c", marginBottom: 6 }}>{label}</div>
-      <div style={{ fontSize: small ? 12 : 22, color: color ?? "#e8a84c", fontFamily: "'Oswald', sans-serif" }}>
+    <div className="rounded border border-[#2a2a32] bg-[#0f0f14] p-3">
+      <div className="mb-1.5 text-[11px] text-[#9a958c]">{label}</div>
+      <div
+        className="font-display"
+        style={{ fontSize: small ? 12 : 22, color: color ?? "#e8a84c" }}
+      >
         {value}
       </div>
     </div>
