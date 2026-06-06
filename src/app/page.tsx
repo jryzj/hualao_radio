@@ -8,6 +8,7 @@ import { EnterOverlay } from "@/components/EnterOverlay";
 import { IosInstallHint } from "@/components/IosInstallHint";
 import { wsBaseUrl } from "@/lib/ws-url";
 import { useWakeLock } from "@/lib/wake-lock";
+import { cn } from "@/lib/cn";
 
 interface Theme {
   id: string;
@@ -645,9 +646,15 @@ export default function Home() {
   })();
 
   return (
-    <div className="listen-page">
-      <main className="layout">
-        <div className="player-slot">
+    // Tailwind v4 migration: the 250-line <style> block is gone. The
+    // .listen-page / .layout / .player-slot / .page-footer / .fab-stack /
+    // .fab / .fab-icon / .fab-text classes are now utility classes.
+    // Per-fab-variant state (cyan wall vs magenta input, idle vs active)
+    // is composed via cn(). The .ios-install-hint block targeted a class
+    // that no longer exists (IosInstallHint was migrated in Phase 1.1).
+    <div className="relative z-[2] flex h-[100vh] [height:100dvh] flex-col overflow-hidden">
+      <main className="mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 items-center justify-center px-3 py-2 pb-[calc(90px+env(safe-area-inset-bottom,0px))] sm:px-4 sm:py-3 sm:pb-24 md:max-w-full md:px-8 md:py-7 md:pb-10 lg:max-w-[1600px] lg:px-10 lg:py-9 lg:pb-12 3xl:px-14 3xl:py-12 3xl:pb-14">
+        <div className="flex w-full min-h-0 items-center justify-center">
           <RadioPlayer
             theme={theme}
             isPlaying={isPlaying}
@@ -665,33 +672,69 @@ export default function Home() {
 
       {/* Two mutually-exclusive floating action buttons (always visible) */}
       {messageFrontendVisible && (
-      <div className="fab-stack">
+      <div className="fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[max(14px,env(safe-area-inset-bottom,14px))] z-50 flex flex-col items-end gap-2.5 md:right-6 md:bottom-6 md:gap-3 lg:right-8 lg:bottom-8 lg:gap-3.5 max-xs:right-3 max-xs:bottom-3 max-xs:gap-2 landscape:max-h-[500px]:right-3 landscape:max-h-[500px]:bottom-3 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:gap-2">
         <button
-          className={`fab ${wallOpen ? "active" : ""}`}
           onClick={toggleWall}
           aria-label={`${wallOpen ? "Hide" : "Show"} message panel`}
           aria-pressed={wallOpen}
+          className={cn(
+            "inline-flex cursor-pointer items-center justify-center gap-2 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-[18px] py-3 text-xs font-medium tracking-[0.18em] text-neon-cyan backdrop-blur-[16px] shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-11 min-w-[132px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            wallOpen && "border-neon-cyan bg-[rgba(0,240,255,0.18)] text-bg-deep shadow-[0_0_24px_rgba(0,240,255,0.6)]",
+            "md:px-[22px] md:py-[13px] md:text-[13px] md:min-h-[46px] md:min-w-[150px]",
+            "lg:px-6 lg:py-3.5 lg:text-[13px] lg:min-h-12 lg:min-w-40",
+            "3xl:px-7 3xl:py-3.5 3xl:text-sm 3xl:min-w-[170px]",
+            "max-xs:px-[14px] max-xs:py-2.5 max-xs:text-[11px] max-xs:min-h-10 max-xs:min-w-[110px]",
+            "landscape:max-h-[500px]:w-11 landscape:max-h-[500px]:min-w-0 landscape:max-h-[500px]:gap-0 landscape:max-h-[500px]:px-3 landscape:max-h-[500px]:py-2.5 landscape:max-h-[500px]:text-[11px] landscape:max-h-[500px]:min-h-10",
+            "md:landscape:max-h-[500px]:w-auto md:landscape:max-h-[500px]:min-w-[130px] md:landscape:max-h-[500px]:gap-2 md:landscape:max-h-[500px]:px-[18px] md:landscape:max-h-[500px]:py-[11px]",
+          )}
         >
-          <span className="fab-icon" aria-hidden>{wallOpen ? "✕" : "💬"}</span>
-          <span className="fab-text display">{wallOpen ? "HIDE" : "VIEW"}</span>
+          <span aria-hidden className="text-[14px] md:text-[15px] lg:text-base">{wallOpen ? "✕" : "💬"}</span>
+          <span className={cn(
+            "flex-none text-center font-display text-xs font-medium leading-none tracking-[0.2em] opacity-75 min-w-14",
+            "md:text-[13px] md:min-w-16",
+            "lg:text-[13px] lg:min-w-[68px]",
+            "3xl:text-sm 3xl:min-w-[72px]",
+            "landscape:max-h-[500px]:hidden",
+            "md:landscape:max-h-[500px]:inline md:landscape:max-h-[500px]:text-xs md:landscape:max-h-[500px]:min-w-14",
+          )}>
+            {wallOpen ? "HIDE" : "VIEW"}
+          </span>
         </button>
         <button
-          className={`fab input-fab ${inputOpen ? "active" : ""}`}
           onClick={toggleInput}
           aria-label={`${inputOpen ? "Hide" : "Show"} message input`}
           aria-pressed={inputOpen}
+          className={cn(
+            "inline-flex cursor-pointer items-center justify-center gap-2 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-[18px] py-3 text-xs font-medium tracking-[0.18em] text-neon-magenta backdrop-blur-[16px] shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-11 min-w-[132px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            inputOpen && "bg-[rgba(255,0,170,0.2)] text-bg-deep shadow-[0_0_24px_rgba(255,0,170,0.6)]",
+            "md:px-[22px] md:py-[13px] md:text-[13px] md:min-h-[46px] md:min-w-[150px]",
+            "lg:px-6 lg:py-3.5 lg:text-[13px] lg:min-h-12 lg:min-w-40",
+            "3xl:px-7 3xl:py-3.5 3xl:text-sm 3xl:min-w-[170px]",
+            "max-xs:px-[14px] max-xs:py-2.5 max-xs:text-[11px] max-xs:min-h-10 max-xs:min-w-[110px]",
+            "landscape:max-h-[500px]:w-11 landscape:max-h-[500px]:min-w-0 landscape:max-h-[500px]:gap-0 landscape:max-h-[500px]:px-3 landscape:max-h-[500px]:py-2.5 landscape:max-h-[500px]:text-[11px] landscape:max-h-[500px]:min-h-10",
+            "md:landscape:max-h-[500px]:w-auto md:landscape:max-h-[500px]:min-w-[130px] md:landscape:max-h-[500px]:gap-2 md:landscape:max-h-[500px]:px-[18px] md:landscape:max-h-[500px]:py-[11px]",
+          )}
         >
-          <span className="fab-icon" aria-hidden>{inputOpen ? "✕" : "✏️"}</span>
-          <span className="fab-text display">{inputOpen ? "CLOSE" : "SIGNAL"}</span>
+          <span aria-hidden className="text-[14px] md:text-[15px] lg:text-base">{inputOpen ? "✕" : "✏️"}</span>
+          <span className={cn(
+            "flex-none text-center font-display text-xs font-medium leading-none tracking-[0.2em] opacity-75 min-w-14",
+            "md:text-[13px] md:min-w-16",
+            "lg:text-[13px] lg:min-w-[68px]",
+            "3xl:text-sm 3xl:min-w-[72px]",
+            "landscape:max-h-[500px]:hidden",
+            "md:landscape:max-h-[500px]:inline md:landscape:max-h-[500px]:text-xs md:landscape:max-h-[500px]:min-w-14",
+          )}>
+            {inputOpen ? "CLOSE" : "SIGNAL"}
+          </span>
         </button>
       </div>
       )}
 
-      <footer className="page-footer mono">
+      <footer className="flex flex-none flex-wrap items-center justify-center gap-2.5 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] font-mono text-[9px] tracking-[0.25em] text-text-dim sm:px-5 sm:py-3.5 sm:pb-[calc(14px+env(safe-area-inset-bottom,0px))] sm:text-[10px] md:px-8 md:py-[18px] md:pb-[calc(18px+env(safe-area-inset-bottom,0px))] md:text-[11px] lg:px-9 lg:py-[18px] lg:pb-[calc(18px+env(safe-area-inset-bottom,0px))] 3xl:px-12 3xl:py-5 3xl:pb-[calc(20px+env(safe-area-inset-bottom,0px))] 3xl:text-xs">
         <span>RADIO AI</span>
-        <span className="footer-sep">·</span>
+        <span className="opacity-40">·</span>
         <span>live broadcast system</span>
-        <span className="footer-sep">·</span>
+        <span className="opacity-40">·</span>
         <span>{new Date().getFullYear()}</span>
       </footer>
 
@@ -699,7 +742,7 @@ export default function Home() {
       <audio
         ref={audioRef}
         preload="auto"
-        style={{ display: "none" }}
+        className="hidden"
         onEnded={onAudioEnded}
         onError={onAudioError}
       />
@@ -730,260 +773,6 @@ export default function Home() {
       {/* iOS Safari install nudge. Self-suppresses once dismissed or
           when the page is already running as an installed PWA. */}
       <IosInstallHint isPlaying={isPlaying} />
-
-      <style>{`
-        .listen-page {
-          position: relative;
-          z-index: 2;
-          height: 100vh;
-          height: 100dvh;
-          display: flex;
-          flex-direction: column;
-          overflow: hidden;
-        }
-
-        .layout {
-          flex: 1 1 auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          padding: 8px 12px 90px;
-          padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
-          max-width: 1400px;
-          width: 100%;
-          margin: 0 auto;
-          min-height: 0;
-        }
-        .player-slot {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          min-height: 0;
-          width: 100%;
-        }
-
-        .page-footer {
-          flex: 0 0 auto;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 10px;
-          padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
-          font-size: 9px;
-          letter-spacing: 0.25em;
-          color: var(--text-dim);
-          flex-wrap: wrap;
-        }
-        .footer-sep { opacity: 0.4; }
-
-        /* === FAB stack (2 independent buttons) === */
-        .fab-stack {
-          position: fixed;
-          right: max(14px, env(safe-area-inset-right, 14px));
-          bottom: max(14px, env(safe-area-inset-bottom, 14px));
-          z-index: 50;
-          display: flex;
-          flex-direction: column;
-          gap: 10px;
-          align-items: flex-end;
-        }
-        .fab {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 12px 18px;
-          background: rgba(13, 13, 24, 0.75);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border: 1.5px solid var(--neon-cyan);
-          color: var(--neon-cyan);
-          border-radius: var(--radius-pill);
-          font-size: 12px;
-          font-weight: 500;
-          letter-spacing: 0.18em;
-          cursor: pointer;
-          box-shadow: 0 0 20px rgba(0, 240, 255, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4);
-          transition: all 0.25s var(--ease-out);
-          min-height: 44px;
-          min-width: 132px;          /* equal-width for both VIEW & SIGNAL */
-          justify-content: center;
-        }
-        .fab:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 0 32px rgba(0, 240, 255, 0.5), 0 12px 40px rgba(0, 0, 0, 0.5);
-          background: rgba(0, 240, 255, 0.1);
-        }
-        .fab.active {
-          background: rgba(0, 240, 255, 0.18);
-          color: var(--bg-deep);
-          border-color: var(--neon-cyan);
-          box-shadow: 0 0 24px rgba(0, 240, 255, 0.6);
-        }
-        .fab.input-fab {
-          border-color: var(--neon-magenta);
-          color: var(--neon-magenta);
-          box-shadow: 0 0 20px rgba(255, 0, 170, 0.3), 0 8px 32px rgba(0, 0, 0, 0.4);
-        }
-        .fab.input-fab:hover {
-          background: rgba(255, 0, 170, 0.1);
-          box-shadow: 0 0 32px rgba(255, 0, 170, 0.5), 0 12px 40px rgba(0, 0, 0, 0.5);
-        }
-        .fab.input-fab.active {
-          background: rgba(255, 0, 170, 0.2);
-          color: var(--bg-deep);
-          box-shadow: 0 0 24px rgba(255, 0, 170, 0.6);
-        }
-        .fab-icon { font-size: 14px; }
-        .fab-text {
-          /* Explicit display font + size so both VIEW/HIDE and SIGNAL/CLOSE
-             render identically regardless of which span-class order wins
-             the cascade. */
-          font-family: var(--font-display);
-          font-size: 12px;
-          font-weight: 500;
-          letter-spacing: 0.2em;
-          line-height: 1;
-          opacity: 0.75;             /* subtle, less shouting */
-          flex: 0 0 auto;
-          text-align: center;
-          min-width: 56px;          /* equal text-block width */
-        }
-
-        /* --- Breakpoints --- */
-        @media (min-width: 480px) {
-          .layout { padding: 12px 16px 96px; }
-          .page-footer { font-size: 10px; padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 0px)); }
-        }
-
-        /* === Tablet portrait (iPad 9.7/10.2/10.9, 768-1023px) === */
-        @media (min-width: 768px) {
-          .layout {
-            padding: 28px 32px 40px;
-            max-width: 100%;
-          }
-          .page-footer { font-size: 11px; padding: 18px 32px calc(18px + env(safe-area-inset-bottom, 0px)); }
-          .fab {
-            padding: 13px 22px;
-            font-size: 13px;
-            min-height: 46px;
-            min-width: 150px;
-          }
-          .fab-text { font-size: 13px; min-width: 64px; }
-          .fab-icon { font-size: 15px; }
-          .fab-stack { right: 24px; bottom: 24px; gap: 12px; }
-        }
-
-        /* === Tablet landscape (iPad 1024-1365) / small desktop === */
-        @media (min-width: 1024px) {
-          .layout {
-            padding: 36px 40px 48px;
-            /* Three-column grid: left breathing space | player | right rail.
-               The player sits in the center column; side panels are siblings
-               in the page-level positioning. */
-            max-width: 1600px;
-          }
-          .page-footer { font-size: 11px; padding: 18px 36px calc(18px + env(safe-area-inset-bottom, 0px)); }
-          .fab {
-            padding: 14px 24px;
-            font-size: 13px;
-            min-height: 48px;
-            min-width: 160px;
-          }
-          .fab-text { font-size: 13px; min-width: 68px; }
-          .fab-icon { font-size: 16px; }
-          .fab-stack { right: 32px; bottom: 32px; gap: 14px; }
-        }
-
-        /* === Wide desktop (>= 1366px) === */
-        @media (min-width: 1366px) {
-          .layout { padding: 48px 56px 56px; }
-          .page-footer { font-size: 12px; padding: 20px 48px calc(20px + env(safe-area-inset-bottom, 0px)); }
-          .fab { padding: 14px 28px; font-size: 14px; min-width: 170px; }
-          .fab-text { font-size: 14px; min-width: 72px; }
-        }
-
-        @media (max-width: 380px) {
-          .fab { padding: 10px 14px; font-size: 11px; min-height: 40px; min-width: 110px; }
-          .fab-stack { right: 12px; bottom: 12px; gap: 8px; }
-        }
-
-        /* iPhone landscape (375-430pt high): vertical space is precious.
-           Switch to icon-only FABs and put them in a row at bottom-right
-           so neither is occluded by the player's visualizer. */
-        @media (orientation: landscape) and (max-height: 500px) {
-          .fab-stack {
-            right: 12px;
-            bottom: 12px;
-            flex-direction: row;
-            gap: 8px;
-          }
-          .fab {
-            padding: 10px 12px;
-            font-size: 11px;
-            min-height: 40px;
-            min-width: 0;
-            width: 44px;
-            justify-content: center;
-            gap: 0;
-          }
-          .fab-text { display: none; }   /* hide text in landscape, icon only */
-        }
-
-        /* Tablet landscape (iPad) — there's enough vertical room for the
-           full text labels, so undo the icon-only override above. */
-        @media (orientation: landscape) and (min-width: 768px) and (max-height: 500px) {
-          .fab {
-            width: auto;
-            min-width: 130px;
-            padding: 11px 18px;
-            gap: 8px;
-          }
-          .fab-text { display: inline; font-size: 12px; min-width: 56px; }
-        }
-
-        /* iOS Safari install nudge — pinned to the top of the viewport
-           so it never overlaps the player or FABs. Sits above the FAB
-           stack (z 50) but below the input drawer (z 70) so a focused
-           drawer covers it. */
-        .ios-install-hint {
-          position: fixed;
-          top: max(12px, env(safe-area-inset-top, 12px));
-          left: 12px;
-          right: 12px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 10px 14px;
-          background: rgba(13, 13, 24, 0.92);
-          backdrop-filter: blur(8px);
-          -webkit-backdrop-filter: blur(8px);
-          border: 1px solid rgba(140, 160, 255, 0.3);
-          border-radius: 10px;
-          color: #e0e2ff;
-          font-size: 14px;
-          line-height: 1.4;
-          z-index: 60;
-          pointer-events: auto;
-        }
-        .ios-install-hint button {
-          background: none;
-          border: 0;
-          color: inherit;
-          font-size: 20px;
-          line-height: 1;
-          cursor: pointer;
-          padding: 4px 8px;
-          margin-left: auto;
-        }
-        @media (min-width: 768px) {
-          .ios-install-hint {
-            left: 50%;
-            right: auto;
-            transform: translateX(-50%);
-            max-width: 540px;
-          }
-        }
-      `}</style>
     </div>
   );
 }
