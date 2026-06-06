@@ -22,121 +22,32 @@ export default function AdminLogin() {
     else setError("密码错误，请重试");
   }
 
-  const s: Record<string, React.CSSProperties> = {
-    container: {
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#0a0a0c",
-      position: "relative",
-      overflow: "hidden",
-      padding: "20px",
-    },
-    bgOrb: {
-      position: "absolute",
-      borderRadius: "50%",
-      filter: "blur(100px)",
-      opacity: 0.15,
-      pointerEvents: "none",
-    },
-    card: {
-      width: "100%",
-      maxWidth: 380,
-      padding: "40px 32px",
-      background: "linear-gradient(180deg, #12121a 0%, #0e0e14 100%)",
-      border: "1px solid #2a2a32",
-      borderRadius: 16,
-      position: "relative",
-      zIndex: 1,
-    },
-    logo: {
-      fontFamily: "'Oswald', sans-serif",
-      fontSize: 12,
-      fontWeight: 500,
-      letterSpacing: 4,
-      color: "#9a958c",
-      textAlign: "center",
-      marginBottom: 32,
-      textTransform: "uppercase",
-    },
-    title: {
-      fontFamily: "'Oswald', sans-serif",
-      fontSize: 26,
-      fontWeight: 700,
-      color: "#f0ece4",
-      textAlign: "center",
-      marginBottom: 6,
-      letterSpacing: 2,
-    },
-    subtitle: {
-      fontSize: 13,
-      color: "#5a5850",
-      textAlign: "center",
-      marginBottom: 32,
-    },
-    input: {
-      width: "100%",
-      padding: "14px 16px",
-      background: "#1a1a20",
-      border: "1px solid #2a2a32",
-      borderRadius: 8,
-      color: "#f0ece4",
-      fontSize: 14,
-      marginBottom: 14,
-      transition: "all 0.2s",
-    },
-    button: {
-      width: "100%",
-      padding: "14px",
-      background: "linear-gradient(145deg, #e8a84c, #c77b4a)",
-      border: "none",
-      borderRadius: 8,
-      color: "#0a0a0c",
-      fontFamily: "'Oswald', sans-serif",
-      fontSize: 13,
-      fontWeight: 600,
-      letterSpacing: 2,
-      cursor: "pointer",
-      transition: "all 0.2s",
-      marginTop: 6,
-    },
-    error: {
-      padding: "10px 14px",
-      background: "rgba(212, 92, 92, 0.1)",
-      border: "1px solid rgba(212, 92, 92, 0.3)",
-      borderRadius: 6,
-      color: "#d45c5c",
-      fontSize: 12,
-      textAlign: "center",
-      marginBottom: 14,
-    },
-    footer: {
-      marginTop: 28,
-      textAlign: "center",
-      fontSize: 11,
-      color: "#5a5850",
-      letterSpacing: 1,
-    },
-  };
+  // Tailwind v4 migration: the 12 style={{}} props and the 15-line
+  // <style> block (input:focus / ::placeholder / button:hover / :active)
+  // are replaced with utility classes. Pseudo-class styles move to
+  // Tailwind's state variants (focus: / placeholder: / hover: / active:).
+  // The gold #e8a84c accent is an arbitrary value — admin doesn't share
+  // the cyberpunk listener theme.
 
   return (
-    <div style={s.container}>
-      <div style={{
-        ...s.bgOrb, width: "min(350px, 80vw)", height: "min(350px, 80vw)",
-        background: "#e8a84c", top: "15%", left: "10%"
-      }} />
-      <div style={{
-        ...s.bgOrb, width: "min(280px, 60vw)", height: "min(280px, 60vw)",
-        background: "#c77b4a", bottom: "15%", right: "10%"
-      }} />
+    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#0a0a0c] p-5">
+      <div className="pointer-events-none absolute top-[15%] left-[10%] h-[min(350px,80vw)] w-[min(350px,80vw)] rounded-full bg-[#e8a84c] opacity-15 blur-[100px]" />
+      <div className="pointer-events-none absolute right-[10%] bottom-[15%] h-[min(280px,60vw)] w-[min(280px,60vw)] rounded-full bg-[#c77b4a] opacity-15 blur-[100px]" />
 
-      <div style={s.card}>
-        <div style={s.logo}>Radio AI — Admin</div>
-        <h1 style={s.title}>登录</h1>
-        <p style={s.subtitle}>输入管理员密码以继续</p>
+      <div className="relative z-[1] w-full max-w-[380px] rounded-2xl border border-[#2a2a32] [background:linear-gradient(180deg,#12121a_0%,#0e0e14_100%)] p-10 px-8">
+        <div className="mb-8 text-center font-display text-xs font-medium uppercase tracking-[4px] text-[#9a958c]">
+          Radio AI — Admin
+        </div>
+        <h1 className="mb-1.5 text-center font-display text-[26px] font-bold tracking-[2px] text-[#f0ece4]">
+          登录
+        </h1>
+        <p className="mb-8 text-center text-[13px] text-[#5a5850]">输入管理员密码以继续</p>
 
-        {error && <div style={s.error}>{error}</div>}
+        {error && (
+          <div className="mb-3.5 rounded-md border border-[rgba(212,92,92,0.3)] bg-[rgba(212,92,92,0.1)] px-3.5 py-2.5 text-center text-xs text-[#d45c5c]">
+            {error}
+          </div>
+        )}
 
         <form onSubmit={handleLogin}>
           <input
@@ -145,40 +56,20 @@ export default function AdminLogin() {
             value={password}
             onChange={e => setPassword(e.target.value)}
             required
-            style={s.input}
             autoFocus
+            className="mb-3.5 w-full rounded-lg border border-[#2a2a32] bg-[#1a1a20] px-4 py-3.5 text-sm text-[#f0ece4] transition-all duration-200 placeholder:text-[#5a5850] focus:border-[#e8a84c] focus:shadow-[0_0_0_3px_rgba(232,168,76,0.1)] focus:outline-none"
           />
           <button
             type="submit"
-            style={{
-              ...s.button,
-              opacity: isLoading ? 0.7 : 1,
-            }}
             disabled={isLoading}
+            className="mt-1.5 w-full cursor-pointer rounded-lg border-0 [background:linear-gradient(145deg,#e8a84c,#c77b4a)] px-4 py-3.5 font-display text-[13px] font-semibold tracking-[2px] text-[#0a0a0c] transition-all duration-200 hover:not-disabled:-translate-y-0.5 hover:not-disabled:shadow-[0_8px_24px_rgba(232,168,76,0.3)] active:not-disabled:translate-y-0 disabled:cursor-default disabled:opacity-70"
           >
             {isLoading ? "验证中..." : "进入后台"}
           </button>
         </form>
 
-        <div style={s.footer}>Radio AI 管理系统</div>
+        <div className="mt-7 text-center text-[11px] tracking-[1px] text-[#5a5850]">Radio AI 管理系统</div>
       </div>
-
-      <style>{`
-        input:focus {
-          border-color: #e8a84c !important;
-          box-shadow: 0 0 0 3px rgba(232, 168, 76, 0.1);
-        }
-        input::placeholder {
-          color: #5a5850;
-        }
-        button:hover:not(:disabled) {
-          transform: translateY(-2px);
-          box-shadow: 0 8px 24px rgba(232, 168, 76, 0.3);
-        }
-        button:active:not(:disabled) {
-          transform: translateY(0);
-        }
-      `}</style>
     </div>
   );
 }
