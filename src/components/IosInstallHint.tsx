@@ -32,7 +32,10 @@ export function IosInstallHint({ isPlaying }: { isPlaying: boolean }) {
   if (!show) return null;
 
   return (
-    <div className="ios-install-hint" role="status">
+    <div
+      role="status"
+      className="fixed left-3 right-3 z-[60] flex items-center gap-3 rounded-[10px] border border-[rgba(140,160,255,0.3)] bg-[rgba(13,13,24,0.92)] px-3.5 py-2.5 text-sm leading-[1.4] text-[#e0e2ff] backdrop-blur-[8px] pointer-events-auto top-[max(12px,env(safe-area-inset-top,12px))] md:left-1/2 md:right-auto md:max-w-[540px] md:-translate-x-1/2"
+    >
       <span>
         要在锁屏后继续收听，请点<span aria-hidden>分享</span>按钮 → <b>添加到主屏幕</b>。
       </span>
@@ -42,6 +45,7 @@ export function IosInstallHint({ isPlaying }: { isPlaying: boolean }) {
           setShow(false);
         }}
         aria-label="关闭提示"
+        className="ml-auto cursor-pointer border-0 bg-transparent p-1 px-2 text-[20px] leading-none text-inherit"
       >
         ×
       </button>
