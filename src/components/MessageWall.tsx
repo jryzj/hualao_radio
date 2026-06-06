@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { cn } from "@/lib/cn";
 
 export interface WallMessage {
   id: string;
@@ -21,13 +22,19 @@ interface Props {
 //   - listH >= frameH  →  [L, L] duplicated, original continuous marquee.
 //   - listH <  frameH  →  [S, L, S, L] with S = frameH between copies.
 //                          Items "fly through" the frame: enter from the
-//                          bottom, traverse, exit the top, re-enter from
-//                          the bottom. Without the spacer the items would
+//                          bottom, traverse, exit the top, re-enter from the
+//                          bottom. Without the spacer the items would
 //                          otherwise be pinned to the top portion of the
 //                          frame for the entire cycle.
 //
 // The animation duration is scaled so each message's pixels/sec stays
 // constant regardless of whether a spacer is in play.
+//
+// Tailwind v4 migration: the 4 inline <style> blocks (empty, static,
+// frame, item) are gone. The `wall-scroll` keyframe lives in @theme
+// (used via `animate-wall-scroll`); per-track duration/paused state
+// still come from inline styles. The .glass-panel className is kept
+// so that MessageWallPanel's `!important` overrides cascade correctly.
 export function MessageWall({
   messages,
   height,
@@ -79,29 +86,9 @@ export function MessageWall({
 
   if (messages.length === 0) {
     return (
-      <div className="wall-empty glass-panel">
-        <span className="wall-empty-dot" />
-        <span className="mono">{emptyText}</span>
-        <style>{`
-          .wall-empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            padding: 24px;
-            color: var(--text-dim);
-            font-size: 12px;
-            letter-spacing: 0.05em;
-          }
-          .wall-empty-dot {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--neon-cyan);
-            box-shadow: 0 0 8px var(--neon-cyan);
-            animation: neon-breathe 1.6s ease-in-out infinite;
-          }
-        `}</style>
+      <div className="glass-panel flex items-center justify-center gap-2.5 p-6 font-mono text-xs tracking-[0.05em] text-text-dim">
+        <span className="h-1.5 w-1.5 animate-[neon-breathe_1.6s_ease-in-out_infinite] rounded-full bg-neon-cyan [box-shadow:0_0_8px_#00f0ff]" />
+        <span>{emptyText}</span>
       </div>
     );
   }
@@ -117,16 +104,12 @@ export function MessageWall({
   if (reduced) {
     return (
       <div
-        className="wall-static glass-panel"
+        className="glass-panel overflow-y-auto p-3"
         style={height ? { height, maxHeight: "60vh" } : { minHeight: 200 }}
         role="log"
         aria-label="Live audience messages"
       >
-        <div className="wall-static-inner">{list}</div>
-        <style>{`
-          .wall-static { overflow-y: auto; padding: 12px; }
-          .wall-static-inner { display: flex; flex-direction: column; gap: 6px; }
-        `}</style>
+        <div className="flex flex-col gap-1.5">{list}</div>
       </div>
     );
   }
@@ -150,8 +133,10 @@ export function MessageWall({
   return (
     <div
       ref={frameRef}
-      className="wall-frame glass-panel"
-      style={height ? { height, maxHeight: "60vh" } : { minHeight: 200 }}
+      className="glass-panel relative min-h-[180px] flex-1 overflow-hidden p-0"
+      style={{
+        ...(height ? { height, maxHeight: "60vh" } : {}),
+      }}
       role="log"
       aria-label="Live audience messages"
       onMouseEnter={() => setPaused(true)}
@@ -159,62 +144,22 @@ export function MessageWall({
     >
       <div
         ref={trackRef}
-        className="wall-track"
+        className="flex animate-wall-scroll flex-col gap-1.5 p-3 will-change-transform"
         style={{
-          "--wall-distance": `${period}px`,
+          ["--wall-distance" as string]: `${period}px`,
           animationDuration: `${duration}s`,
           animationPlayState: paused ? "paused" : "running",
         } as React.CSSProperties}
       >
-        {spacerH > 0 && <div className="wall-spacer" style={{ height: spacerH }} aria-hidden />}
-        <div ref={listRef} className="wall-list">{list}</div>
-        {spacerH > 0 && <div className="wall-spacer" style={{ height: spacerH }} aria-hidden />}
-        <div className="wall-list">{list}</div>
+        {spacerH > 0 && <div className="flex-none" style={{ height: spacerH }} aria-hidden />}
+        <div ref={listRef} className="flex flex-col [gap:inherit]">{list}</div>
+        {spacerH > 0 && <div className="flex-none" style={{ height: spacerH }} aria-hidden />}
+        <div className="flex flex-col [gap:inherit]">{list}</div>
       </div>
 
       {/* Top + bottom fade gradients so items dissolve into the frame */}
-      <div className="wall-fade top" />
-      <div className="wall-fade bottom" />
-
-      <style>{`
-        .wall-frame {
-          position: relative;
-          overflow: hidden;
-          padding: 0;
-          flex: 1 1 auto;
-          min-height: 180px;
-        }
-        .wall-track {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          padding: 12px;
-          will-change: transform;
-          animation: wall-scroll linear infinite;
-        }
-        .wall-list {
-          display: flex;
-          flex-direction: column;
-          gap: inherit;
-        }
-        .wall-spacer { flex: 0 0 auto; }
-        .wall-fade {
-          position: absolute;
-          left: 0;
-          right: 0;
-          height: 32px;
-          pointer-events: none;
-          z-index: 1;
-        }
-        .wall-fade.top {
-          top: 0;
-          background: linear-gradient(180deg, var(--bg-glass-strong) 0%, transparent 100%);
-        }
-        .wall-fade.bottom {
-          bottom: 0;
-          background: linear-gradient(0deg, var(--bg-glass-strong) 0%, transparent 100%);
-        }
-      `}</style>
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-[1] h-8 [background:linear-gradient(180deg,var(--bg-glass-strong)_0%,transparent_100%)]" />
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-[1] h-8 [background:linear-gradient(0deg,var(--bg-glass-strong)_0%,transparent_100%)]" />
     </div>
   );
 }
@@ -222,77 +167,26 @@ export function MessageWall({
 function WallItem({ message }: { message: WallMessage }) {
   const initial = (message.authorName || "?").trim().charAt(0).toUpperCase();
   return (
-    <div className="wall-item">
-      <span className="wall-avatar" aria-hidden>{initial}</span>
-      <div className="wall-body">
-        <div className="wall-head">
-          <span className="wall-author display">{message.authorName || "anonymous"}</span>
-          <span className="wall-time mono">{formatTime(message.createdAt)}</span>
+    <div className="flex gap-2.5 rounded-md border border-border-cyan border-l-2 border-l-neon-cyan bg-[rgba(0,240,255,0.03)] p-2.5 transition-[background,border-color] duration-200 ease-out-soft hover:border-border-cyan-strong hover:bg-[rgba(0,240,255,0.06)]">
+      <span
+        aria-hidden
+        className="flex h-7 w-7 flex-none items-center justify-center rounded-full bg-gradient-to-br from-neon-violet to-neon-cyan font-display text-xs font-bold uppercase text-bg-deep [box-shadow:0_0_8px_rgba(0,240,255,0.3)]"
+      >
+        {initial}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 flex items-baseline gap-2">
+          <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-neon-cyan">
+            {message.authorName || "anonymous"}
+          </span>
+          <span className="font-mono text-[9px] tracking-[0.05em] text-text-dim">
+            {formatTime(message.createdAt)}
+          </span>
         </div>
-        <p className="wall-text">{message.content}</p>
+        <p className="m-0 break-words text-[13px] leading-[1.5] text-text-primary">
+          {message.content}
+        </p>
       </div>
-
-      <style>{`
-        .wall-item {
-          display: flex;
-          gap: 10px;
-          padding: 10px 12px;
-          background: rgba(0, 240, 255, 0.03);
-          border: 1px solid var(--border);
-          border-left: 2px solid var(--neon-cyan);
-          border-radius: var(--radius-md);
-          transition: background 0.2s var(--ease-out), border-color 0.2s var(--ease-out);
-        }
-        .wall-item:hover {
-          background: rgba(0, 240, 255, 0.06);
-          border-color: var(--border-strong);
-        }
-        .wall-avatar {
-          flex: 0 0 28px;
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: linear-gradient(135deg, var(--neon-violet), var(--neon-cyan));
-          color: var(--bg-deep);
-          font-family: var(--font-display);
-          font-weight: 700;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          text-transform: uppercase;
-          box-shadow: 0 0 8px rgba(0, 240, 255, 0.3);
-        }
-        .wall-body {
-          flex: 1 1 auto;
-          min-width: 0;
-        }
-        .wall-head {
-          display: flex;
-          align-items: baseline;
-          gap: 8px;
-          margin-bottom: 2px;
-        }
-        .wall-author {
-          font-size: 11px;
-          font-weight: 600;
-          letter-spacing: 0.1em;
-          color: var(--neon-cyan);
-          text-transform: uppercase;
-        }
-        .wall-time {
-          font-size: 9px;
-          color: var(--text-dim);
-          letter-spacing: 0.05em;
-        }
-        .wall-text {
-          font-size: 13px;
-          color: var(--text-primary);
-          line-height: 1.5;
-          word-break: break-word;
-          margin: 0;
-        }
-      `}</style>
     </div>
   );
 }
