@@ -2,7 +2,16 @@
 // The token is read from WS_BROADCAST_TOKEN; if it's missing, the
 // helper throws so callers can fail fast at boot rather than silently
 // failing to broadcast.
-const BROADCAST_BASE = process.env.WS_BROADCAST_BASE_URL ?? "http://127.0.0.1:8081";
+//
+// BROADCAST_BASE precedence:
+//   1. WS_BROADCAST_BASE_URL — full URL override, use this for
+//      non-loopback hosts (e.g. when Next and ws-server are on
+//      different machines in a multi-host deploy).
+//   2. WS_HTTP_PORT (default 8081) — keeps Next in sync with the
+//      ws-server's port if you only set the port. Loopback-only,
+//      since the ws-server binds to 127.0.0.1.
+const BROADCAST_BASE =
+  process.env.WS_BROADCAST_BASE_URL ?? `http://127.0.0.1:${process.env.WS_HTTP_PORT ?? 8081}`;
 
 function token(): string {
   const t = process.env.WS_BROADCAST_TOKEN;
