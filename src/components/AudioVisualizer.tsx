@@ -1,44 +1,93 @@
 "use client";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface Props {
   analyser: AnalyserNode | null;
   isPlaying: boolean;
-  size?: number;
   barCount?: number;
 }
 
-// Multi-effect audio visualizer:
-//   - 3 concentric SVG rings (rotating, dashed)
-//   - 48 FFT bars on a circular canvas around the rings
-//   - 2 CSS ripples emanating from center
-// The FFT loop is driven by requestAnimationFrame; we never setState per
-// frame — we draw directly to canvas. This keeps React out of the hot path.
+// All circular elements — the FFT orbit, the SVG rings, the center
+// dot, the ripple origin — share one geometric center, the wrapper's
+// content-box center. The SVG viewBox is 100x100 with the default
+// preserveAspectRatio=xMidYMid meet; on a square wrapper, its (50,50)
+// point maps to the wrapper's geometric center. The FFT is drawn on a
+// canvas that fills the wrapper, with cx=w/2, cy=h/2 — the same point.
+// So the bars and the rings are forced to be concentric regardless of
+// the wrapper's rendered size.
 //
-// Tailwind v4 migration: the 35-line <style> block is gone. Per-element
-// animation durations (16s / 22s / 1.6s for the rings, 3.2s for the
-// ripples) are expressed as Tailwind arbitrary values where they
-// differ from the @theme defaults.
-export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Props) {
+// To make the concentricity obvious at a glance the SVG carries:
+//   - a small filled center dot (the explicit "core" of the visualizer)
+//   - a radial cyan glow around the dot
+//   - an inner ring that sits exactly on the FFT orbit (low-opacity
+//     "track" so the user can see the bars ride a single circle)
+//   - an outer dashed gradient ring (rotates when playing)
+//   - a static outermost frame ring
+//   - 4 cardinal tick marks
+//
+// Geometry, expressed as ratios of the wrapper's smaller CSS dimension
+// (minDim). The wrapper enforces 1:1 aspect via `aspect-square`; on
+// the rare case the parent provides a non-square box, minDim is the
+// smaller side and all radii scale against it so nothing overflows.
+const FFT_ORBIT_RATIO = 0.30;   // r / minDim — inner end of each bar
+const FFT_BAR_GAP = 0.018;      // r / minDim — gap from orbit ring to bar start
+const FFT_BAR_MIN = 0.010;      // r / minDim — minimum bar length (silent)
+const FFT_BAR_MAX = 0.140;      // r / minDim — maximum bar length (peak)
+const BAR_WIDTH_REF = 280;      // wrapper CSS px at which lineWidth is "1x"
+
+export function AudioVisualizer({ analyser, isPlaying, barCount = 48 }: Props) {
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rafRef = useRef<number | null>(null);
   const dataRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  // Track the actual rendered size of the wrapper. We use a ref (not
+  // state) so the rAF tick can read it without re-rendering, and a
+  // tiny state counter to re-render the static SVG rings on resize.
+  const sizeRef = useRef<{ w: number; h: number; dpr: number } | null>(null);
+  const [, forceRender] = useState(0);
 
-  // Set up analyser buffer once the analyser is ready
+  // === ResizeObserver: track actual rendered size =================
+  // clientWidth/clientHeight read from inside a useEffect can be stale
+  // (the layout hasn't run yet) or wrong (the parent reflowed but the
+  // effect didn't re-fire). A ResizeObserver on the wrapper is the
+  // only reliable way to react to orientation changes, window resizes,
+  // and parent relayouts.
+  useEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
+    const update = () => {
+      const rect = wrapper.getBoundingClientRect();
+      sizeRef.current = {
+        w: rect.width,
+        h: rect.height,
+        dpr: Math.min(window.devicePixelRatio || 1, 2),
+      };
+      forceRender((n) => n + 1);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(wrapper);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", update);
+    };
+  }, []);
+
+  // === Analyser buffer: allocate once when analyser is ready ======
   useEffect(() => {
     if (!analyser) return;
     const buf = new ArrayBuffer(analyser.frequencyBinCount);
     dataRef.current = new Uint8Array(buf) as Uint8Array<ArrayBuffer>;
   }, [analyser]);
 
-  // Drive canvas — only while playing AND analyser ready
+  // === Canvas rAF loop: draw FFT bars when playing ================
   useEffect(() => {
     if (!isPlaying || !analyser) {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
       }
-      // Clear canvas when stopped
       const canvas = canvasRef.current;
       if (canvas) {
         const ctx = canvas.getContext("2d");
@@ -52,14 +101,25 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Resolve actual size from canvas clientWidth if no explicit size was passed
-    const cssSize = size ?? Math.max(160, Math.min(canvas.clientWidth, canvas.clientHeight) || 320);
+    // ResizeObserver has populated sizeRef; if the wrapper still has
+    // no size (e.g. display:none ancestor), bail — the next
+    // ResizeObserver fire will retry.
+    const size = sizeRef.current;
+    if (!size) return;
+    const { w, h, dpr } = size;
+    if (w === 0 || h === 0) return;
+    const minDim = Math.min(w, h);
+    // FFT center = wrapper geometric center. SVG (50,50) in a 100x100
+    // viewBox under xMidYMid meet (default) maps to the same point.
+    const cx = w / 2;
+    const cy = h / 2;
 
-    // Handle high-DPI
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    if (canvas.width !== cssSize * dpr || canvas.height !== cssSize * dpr) {
-      canvas.width = cssSize * dpr;
-      canvas.height = cssSize * dpr;
+    // Back the canvas at device pixel resolution. Using the full
+    // wrapper (not minDim) so the clearRect below wipes the whole
+    // drawn area, not just a centered square.
+    if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+      canvas.width = w * dpr;
+      canvas.height = h * dpr;
     }
     ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform before scale
     ctx.scale(dpr, dpr);
@@ -68,27 +128,27 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
       ?? new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
     dataRef.current = data;
 
-    const radius = cssSize * 0.32;
+    const orbitR = minDim * FFT_ORBIT_RATIO;
+    const barInnerR = orbitR + minDim * FFT_BAR_GAP;
+    const barMin = minDim * FFT_BAR_MIN;
+    const barMax = minDim * FFT_BAR_MAX;
 
     const tick = () => {
       analyser.getByteFrequencyData(data);
-      ctx.clearRect(0, 0, cssSize, cssSize);
+      ctx.clearRect(0, 0, w, h);
 
-      // Draw bars around circle (cx, cy in CSS pixels)
-      const cx = cssSize / 2;
-      const cy = cssSize / 2;
-      const barWidthScale = cssSize / 320;
+      const barWidthScale = minDim / BAR_WIDTH_REF;
       for (let i = 0; i < barCount; i++) {
         // Sample with slight bias toward bass (lower 60% of frequencies)
         const idx = Math.floor(Math.pow(i / barCount, 1.4) * data.length * 0.6);
         const v = data[idx] / 255; // 0..1
-        const barH = 4 + v * (cssSize * 0.18);
+        const barH = barMin + v * (barMax - barMin);
         const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
 
-        const x1 = cx + Math.cos(angle) * (radius + 6);
-        const y1 = cy + Math.sin(angle) * (radius + 6);
-        const x2 = cx + Math.cos(angle) * (radius + 6 + barH);
-        const y2 = cy + Math.sin(angle) * (radius + 6 + barH);
+        const x1 = cx + Math.cos(angle) * barInnerR;
+        const y1 = cy + Math.sin(angle) * barInnerR;
+        const x2 = cx + Math.cos(angle) * (barInnerR + barH);
+        const y2 = cy + Math.sin(angle) * (barInnerR + barH);
 
         // Color gradient: cyan (low) → magenta (mid) → yellow (high)
         const hue = 180 + v * 120;
@@ -114,84 +174,114 @@ export function AudioVisualizer({ analyser, isPlaying, size, barCount = 48 }: Pr
       if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     };
-  }, [isPlaying, analyser, size, barCount]);
+  }, [isPlaying, analyser, barCount]);
 
-  // Outer wrapper fills its parent; canvas inside fills it.
   return (
-    <div className="relative flex h-full w-full items-center justify-center" aria-hidden>
-      {/* CSS ripples — under everything */}
+    <div
+      ref={wrapperRef}
+      className="relative aspect-square w-full overflow-hidden"
+      aria-hidden
+    >
+      {/* CSS ripples — emanate from the geometric center */}
       {isPlaying && (
         <div className="pointer-events-none absolute inset-0">
-          <span className="animate-[ripple_3.2s_ease-out_infinite] absolute inset-0 m-auto h-3/5 w-3/5 rounded-full border-[1.5px] border-neon-cyan opacity-0 will-change-[transform,opacity]" />
-          <span className="animate-[ripple_3.2s_ease-out_1.6s_infinite] absolute inset-0 m-auto h-3/5 w-3/5 rounded-full border-[1.5px] border-neon-magenta opacity-0 will-change-[transform,opacity]" />
+          <span
+            className="absolute left-1/2 top-1/2 h-3/5 w-3/5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-neon-cyan opacity-0 animate-[ripple_3.2s_ease-out_infinite] will-change-[transform,opacity]"
+          />
+          <span
+            className="absolute left-1/2 top-1/2 h-3/5 w-3/5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-neon-magenta opacity-0 animate-[ripple_3.2s_ease-out_1.6s_infinite] will-change-[transform,opacity]"
+          />
         </div>
       )}
 
-      {/* SVG rings */}
+      {/* SVG rings — all centered at viewBox (50,50), which maps to
+          the wrapper's geometric center. preserveAspectRatio defaults
+          to xMidYMid meet; on the 1:1 wrapper the (50,50) point lands
+          at the same (w/2, h/2) the FFT uses. */}
       <svg
         viewBox="0 0 100 100"
         width="100%"
         height="100%"
+        preserveAspectRatio="xMidYMid meet"
         className="absolute inset-0"
       >
         <defs>
-          <linearGradient id="ring-grad-cyan" x1="0" y1="0" x2="1" y2="1">
+          <radialGradient id="av-core-glow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="var(--neon-cyan)" stopOpacity="0.9" />
+            <stop offset="55%" stopColor="var(--neon-cyan)" stopOpacity="0.18" />
+            <stop offset="100%" stopColor="var(--neon-cyan)" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id="av-ring-outer" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="var(--neon-cyan)" />
             <stop offset="100%" stopColor="var(--neon-violet)" />
           </linearGradient>
-          <linearGradient id="ring-grad-magenta" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id="av-ring-inner" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stopColor="var(--neon-magenta)" />
             <stop offset="100%" stopColor="var(--neon-pink)" />
           </linearGradient>
         </defs>
 
-        {/* outer dashed ring — rotates clockwise */}
+        {/* Outermost frame ring — static, dashed, low opacity */}
         <circle
-          cx="50" cy="50" r="46"
+          cx="50" cy="50" r="47"
           fill="none"
-          stroke="url(#ring-grad-cyan)"
+          stroke="url(#av-ring-outer)"
+          strokeWidth="0.25"
+          strokeDasharray="1 3"
+          opacity="0.45"
+        />
+        {/* Outer ring — rotates clockwise when playing */}
+        <circle
+          cx="50" cy="50" r="42"
+          fill="none"
+          stroke="url(#av-ring-outer)"
           strokeWidth="0.4"
-          strokeDasharray="2 3"
-          opacity="0.7"
-          className={isPlaying ? "origin-center animate-[ring-spin_16s_linear_infinite]" : "origin-center"}
+          strokeDasharray="1.5 2.5"
+          opacity="0.75"
+          className={isPlaying ? "origin-center animate-[ring-spin_18s_linear_infinite]" : "origin-center"}
+          style={{ transformOrigin: "50% 50%" }}
         />
-        {/* middle dashed ring — rotates counter-clockwise */}
-        <circle
-          cx="50" cy="50" r="38"
-          fill="none"
-          stroke="url(#ring-grad-magenta)"
-          strokeWidth="0.3"
-          strokeDasharray="1 2"
-          opacity="0.6"
-          className={isPlaying ? "origin-center animate-[ring-spin-reverse_22s_linear_infinite]" : "origin-center"}
-        />
-        {/* inner solid ring — pulses */}
+        {/* Inner ring — coincides with the FFT orbit (r=30 viewBox =
+           0.30 of minDim). Low-opacity "track" so the user can see
+           the bars sit on a single concentric circle. */}
         <circle
           cx="50" cy="50" r="30"
           fill="none"
           stroke="var(--neon-cyan)"
-          strokeWidth="0.6"
-          opacity="0.5"
-          className={isPlaying ? "origin-center animate-[neon-breathe_1.6s_ease-in-out_infinite]" : "origin-center"}
-        />
-        {/* innermost glow circle */}
-        <circle
-          cx="50" cy="50" r="22"
-          fill="none"
-          stroke="var(--neon-cyan)"
           strokeWidth="0.2"
-          opacity="0.3"
+          strokeDasharray="0.4 1.2"
+          opacity="0.45"
         />
-        {/* center crosshair tick marks */}
-        <g opacity="0.4" stroke="var(--neon-cyan)" strokeWidth="0.3">
-          <line x1="50" y1="2" x2="50" y2="4" />
-          <line x1="50" y1="96" x2="50" y2="98" />
-          <line x1="2" y1="50" x2="4" y2="50" />
-          <line x1="96" y1="50" x2="98" y2="50" />
+        {/* Pulse ring — additional concentric layer, breathes */}
+        <circle
+          cx="50" cy="50" r="18"
+          fill="none"
+          stroke="url(#av-ring-inner)"
+          strokeWidth="0.4"
+          opacity="0.55"
+          className={isPlaying ? "origin-center animate-[neon-breathe_1.6s_ease-in-out_infinite]" : "origin-center"}
+          style={{ transformOrigin: "50% 50%" }}
+        />
+        {/* Center glow */}
+        <circle cx="50" cy="50" r="6" fill="url(#av-core-glow)" />
+        {/* Center dot — the explicit concentric marker. Always drawn
+           at viewBox (50,50) so the eye can verify the center. */}
+        <circle
+          cx="50" cy="50" r="0.9"
+          fill="var(--neon-cyan)"
+          opacity="0.95"
+        />
+        {/* Edge tick marks at 4 cardinals — frame the visualizer */}
+        <g opacity="0.45" stroke="var(--neon-cyan)" strokeWidth="0.3">
+          <line x1="50" y1="1" x2="50" y2="3.5" />
+          <line x1="50" y1="96.5" x2="50" y2="99" />
+          <line x1="1" y1="50" x2="3.5" y2="50" />
+          <line x1="96.5" y1="50" x2="99" y2="50" />
         </g>
       </svg>
 
-      {/* FFT bars canvas */}
+      {/* FFT bars canvas — drawn on top of the SVG so the bars
+          appear to orbit on the inner ring */}
       <canvas
         ref={canvasRef}
         className="pointer-events-none absolute inset-0 block h-full w-full"

@@ -10,7 +10,7 @@
 //
 // State is kept on globalThis so it survives Next.js hot reloads in dev.
 
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 import { getLLMConfig, getNewsConfig, ensureNewsConfig, type NewsConfig as Cfg } from "@/config";
 import { fetchAllSources, type FetchedItem } from "./rss";
 import { searchRssItems, type FtsResult } from "./fts";
@@ -111,7 +111,7 @@ async function runRssRefresh(): Promise<{ fetched: number; failed: number; items
 }
 
 async function markSourceSuccess(id: string, feedTitle?: string) {
-  await prisma.rssSource.update({
+  await withBusyRetry(() => prisma.rssSource.update({
     where: { id },
     data: {
       failCount: 0,
@@ -119,7 +119,7 @@ async function markSourceSuccess(id: string, feedTitle?: string) {
       lastFetchedAt: new Date(),
       ...(feedTitle && !titleEmpty(feedTitle) ? { title: feedTitle } : {}),
     },
-  });
+  }));
 }
 
 async function markSourceFailure(id: string) {
@@ -127,10 +127,10 @@ async function markSourceFailure(id: string) {
   if (!src) return;
   const newCount = src.failCount + 1;
   const newStatus = newCount >= 3 ? "disabled" : src.status;
-  await prisma.rssSource.update({
+  await withBusyRetry(() => prisma.rssSource.update({
     where: { id },
     data: { failCount: newCount, status: newStatus, lastFetchedAt: new Date() },
-  });
+  }));
   if (newStatus === "disabled") {
     console.warn(`[NewsService] source ${src.url} disabled after ${newCount} failures`);
   }
@@ -145,7 +145,7 @@ async function writeItems(sourceId: string, items: FetchedItem[]): Promise<numbe
   for (const it of items) {
     if (!it.link) continue;
     try {
-      await prisma.rssItem.upsert({
+      await withBusyRetry(() => prisma.rssItem.upsert({
         where: { sourceId_link: { sourceId, link: it.link } },
         create: {
           sourceId,
@@ -162,7 +162,7 @@ async function writeItems(sourceId: string, items: FetchedItem[]): Promise<numbe
           description: it.description,
           fetchedAt: new Date(),
         },
-      });
+      }));
       written++;
     } catch (err) {
       console.error("[NewsService] writeItem error:", err);
@@ -275,16 +275,37 @@ async function pruneCycle(): Promise<void> {
     // Retention is based on content age (publishedAt), not fetch age.
     // For items missing publishedAt, fall back to fetchedAt so they don't
     // accumulate forever.
-    const r = await prisma.rssItem.deleteMany({
-      where: {
-        OR: [
-          { publishedAt: { lt: cutoff } },
-          { publishedAt: null, fetchedAt: { lt: cutoff } },
-        ],
-      },
-    });
-    if (r.count > 0) {
-      console.log(`[NewsService] Pruned ${r.count} items older than ${cfg.retentionDays}d (by publishedAt, fallback fetchedAt)`);
+    //
+    // Batched delete: a single big deleteMany holds SQLite's global
+    // write lock for the full duration, which trips libsql's socket
+    // timeout (P1008) once the candidate set gets into the thousands.
+    // Each iteration is an independent read-then-delete transaction, so
+    // the write lock is released between batches and concurrent readers
+    // (and the RSS refresh) keep moving. Order by fetchedAt ASC so we
+    // drain oldest first and the partial-progress state stays
+    // self-consistent if the cycle is interrupted.
+    const BATCH = 200;
+    let total = 0;
+    while (true) {
+      const candidates = await prisma.rssItem.findMany({
+        where: {
+          OR: [
+            { publishedAt: { lt: cutoff } },
+            { publishedAt: null, fetchedAt: { lt: cutoff } },
+          ],
+        },
+        select: { id: true },
+        take: BATCH,
+        orderBy: { fetchedAt: "asc" },
+      });
+      if (candidates.length === 0) break;
+      const ids = candidates.map(c => c.id);
+      const r = await withBusyRetry(() => prisma.rssItem.deleteMany({ where: { id: { in: ids } } }));
+      total += r.count;
+      if (candidates.length < BATCH) break;
+    }
+    if (total > 0) {
+      console.log(`[NewsService] Pruned ${total} items older than ${cfg.retentionDays}d (by publishedAt, fallback fetchedAt, batched)`);
     }
   } catch (err) {
     console.error("[NewsService] Prune error:", err);

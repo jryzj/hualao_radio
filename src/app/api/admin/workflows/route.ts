@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 
 export async function GET() {
   const workflows = await prisma.workflow.findMany();
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
   if (data.speed === undefined) data.speed = 1.0;
 
   try {
-    const workflow = await prisma.workflow.create({ data: data as never });
+    const workflow = await withBusyRetry(() => prisma.workflow.create({ data: data as never }));
     return NextResponse.json(workflow);
   } catch {
     // Logged server-side; don't echo raw Prisma errors to the client.

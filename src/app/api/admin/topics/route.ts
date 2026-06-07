@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 
 export async function GET() {
   const themes = await prisma.theme.findMany({ include: { persona: true, workflow: true } });
@@ -8,7 +8,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const theme = await prisma.theme.create({
+  const theme = await withBusyRetry(() => prisma.theme.create({
     data: {
       name: body.name,
       description: body.description ?? "",
@@ -19,6 +19,6 @@ export async function POST(req: NextRequest) {
       personaId: body.personaId,
       workflowId: body.workflowId,
     },
-  });
+  }));
   return NextResponse.json(theme);
 }

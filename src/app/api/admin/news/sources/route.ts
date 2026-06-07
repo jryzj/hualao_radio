@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 import { parseOpml } from "@/lib/news/opml";
 import { newsService } from "@/lib/news";
 import dns from "dns/promises";
@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
       }
       const existing = await prisma.rssSource.findUnique({ where: { url: feed.xmlUrl } });
       if (existing) {
-        await prisma.rssSource.update({
+        await withBusyRetry(() => prisma.rssSource.update({
           where: { url: feed.xmlUrl },
           data: {
             title: feed.title || existing.title,
@@ -130,10 +130,10 @@ export async function POST(req: NextRequest) {
             status: "active",
             failCount: 0,
           },
-        });
+        }));
         updated++;
       } else {
-        await prisma.rssSource.create({
+        await withBusyRetry(() => prisma.rssSource.create({
           data: {
             url: feed.xmlUrl,
             title: feed.title,
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
             description: feed.description,
             language: feed.language,
           },
-        });
+        }));
         created++;
       }
     }
@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
         { status: 409 },
       );
     }
-    const created = await prisma.rssSource.create({
+    const created = await withBusyRetry(() => prisma.rssSource.create({
       data: {
         url: body.url,
         title: body.title ?? "",
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
         description: body.description ?? "",
         language: body.language ?? "",
       },
-    });
+    }));
     return NextResponse.json({ ok: true, id: created.id });
   }
 

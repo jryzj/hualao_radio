@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 
 // Only these fields may be updated via PUT. A wider allowlist (e.g.
 // forwarding the raw body) would let an unauthenticated caller (or
@@ -46,7 +46,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "no editable fields provided" }, { status: 400 });
   }
   try {
-    const workflow = await prisma.workflow.update({ where: { id }, data });
+    const workflow = await withBusyRetry(() => prisma.workflow.update({ where: { id }, data }));
     return NextResponse.json(workflow);
   } catch {
     // Logged server-side; don't echo raw Prisma errors to the client
@@ -58,6 +58,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await prisma.workflow.delete({ where: { id } });
+  await withBusyRetry(() => prisma.workflow.delete({ where: { id } }));
   return NextResponse.json({ success: true });
 }

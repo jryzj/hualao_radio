@@ -74,3 +74,10 @@ next-env.d.ts
 /.claude/settings.local.json
 **/settings.local.json
 
+# SQLite WAL and shared-memory files (companions to dev.db)
+*.db-shm
+*.db-wal
+
+# Script-generated screenshots and visual test artifacts
+/scripts/*.png
+

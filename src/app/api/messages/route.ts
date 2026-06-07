@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 import { moderateMessage } from "@/lib/moderation";
 import { liveEngine } from "@/lib/live-engine";
 import { getMessageConfig } from "@/config";
@@ -47,25 +47,25 @@ export async function POST(req: NextRequest) {
     .slice(0, MAX_CONTENT_LEN)
     .replace(/[{}]/g, "");
 
-  const message = await prisma.message.create({
+  const message = await withBusyRetry(() => prisma.message.create({
     data: {
       content: sanitizedContent,
       authorName: author,
       status: "pending",
     },
-  });
+  }));
 
   moderateMessage(message.content, message.authorName).then(async (result: { status: "approved" | "rejected" | "pending"; reason?: string }) => {
     let updated;
     try {
-      updated = await prisma.message.update({
+      updated = await withBusyRetry(() => prisma.message.update({
         where: { id: message.id, status: "pending" },
         data: {
           status: result.status,
           reviewedAt: new Date(),
           aiReason: result.reason,
         },
-      });
+      }));
     } catch {
       return; // admin already acted — drop AI result
     }

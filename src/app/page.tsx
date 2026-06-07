@@ -71,6 +71,12 @@ export default function Home() {
 
   const [queueLength, setQueueLength] = useState(0);
   const [bufferStatus, setBufferStatus] = useState<{ ready: boolean; sentences: number; seconds: number; needed: number }>({ ready: false, sentences: 0, seconds: 0, needed: 0 });
+  // Flips true once the server has finished draining its replay buffer
+  // to us and we are receiving live chunks. The audio queue/playNext
+  // path doesn't branch on this — the replay and live chunks go through
+  // the same code — but keeping the flag around means a future UI
+  // ("TUNING IN…" → "LIVE") is a one-line change.
+  const [replayComplete, setReplayComplete] = useState(false);
 
   const audioQueueRef = useRef<string[]>([]);
   const durationQueueRef = useRef<number[]>([]);
@@ -494,6 +500,16 @@ export default function Home() {
           updateBufferStatus();
           return;
         }
+        // Replay-to-late-joiners marker from ws-server: every chunk the
+        // server buffered (last N from the live engine) has been
+        // pushed to us; from here on we are receiving live chunks. The
+        // queue logic is identical for replay vs live — both are binary
+        // audio frames appended to audioQueueRef.current — so this
+        // branch only flips a UI flag. Reset on stopPlayback below.
+        if (e.data.startsWith('{"type":"replay_end"}')) {
+          setReplayComplete(true);
+          return;
+        }
         return;
       }
       const byteLen = (e.data as ArrayBuffer).byteLength;
@@ -544,6 +560,7 @@ export default function Home() {
     isPlayingRef.current = false;
     setQueueLength(0);
     updateBufferStatus();
+    setReplayComplete(false);
     setIsPlaying(false);
   }, [updateBufferStatus]);
 
@@ -652,8 +669,8 @@ export default function Home() {
     // Per-fab-variant state (cyan wall vs magenta input, idle vs active)
     // is composed via cn(). The .ios-install-hint block targeted a class
     // that no longer exists (IosInstallHint was migrated in Phase 1.1).
-    <div className="relative z-[2] flex h-[100vh] [height:100dvh] flex-col overflow-hidden">
-      <main className="mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 items-center justify-center px-3 py-2 pb-[calc(90px+env(safe-area-inset-bottom,0px))] sm:px-4 sm:py-3 sm:pb-24 md:max-w-full md:px-8 md:py-7 md:pb-10 lg:max-w-[1600px] lg:px-10 lg:py-9 lg:pb-12 3xl:px-14 3xl:py-12 3xl:pb-14">
+    <div className="relative z-[2] flex min-h-[100dvh] flex-col overflow-hidden">
+      <main className="mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 md:max-w-full md:px-8 md:py-7 lg:max-w-[1600px] lg:px-10 lg:py-9 3xl:px-14 3xl:py-12 landscape-short:py-0.5 landscape-shorter:py-0">
         <div className="flex w-full min-h-0 items-center justify-center">
           <RadioPlayer
             theme={theme}
@@ -672,31 +689,18 @@ export default function Home() {
 
       {/* Two mutually-exclusive floating action buttons (always visible) */}
       {messageFrontendVisible && (
-      <div className="fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[max(14px,env(safe-area-inset-bottom,14px))] z-50 flex flex-col items-end gap-2.5 md:right-6 md:bottom-6 md:gap-3 lg:right-8 lg:bottom-8 lg:gap-3.5 max-xs:right-3 max-xs:bottom-3 max-xs:gap-2 landscape:max-h-[500px]:right-3 landscape:max-h-[500px]:bottom-3 landscape:max-h-[500px]:flex-row landscape:max-h-[500px]:gap-2">
+      <div className="fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[max(14px,env(safe-area-inset-bottom,14px))] z-50 flex flex-col items-end gap-2.5 md:right-6 md:bottom-6 md:gap-3 lg:right-8 lg:bottom-8 lg:gap-3.5 max-xs:right-3 max-xs:bottom-3 max-xs:gap-2 landscape-short:right-2.5 landscape-short:bottom-2.5">
         <button
           onClick={toggleWall}
           aria-label={`${wallOpen ? "Hide" : "Show"} message panel`}
           aria-pressed={wallOpen}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-2 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-[18px] py-3 text-xs font-medium tracking-[0.18em] text-neon-cyan backdrop-blur-[16px] shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-11 min-w-[132px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan backdrop-blur-[16px] shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
             wallOpen && "border-neon-cyan bg-[rgba(0,240,255,0.18)] text-bg-deep shadow-[0_0_24px_rgba(0,240,255,0.6)]",
-            "md:px-[22px] md:py-[13px] md:text-[13px] md:min-h-[46px] md:min-w-[150px]",
-            "lg:px-6 lg:py-3.5 lg:text-[13px] lg:min-h-12 lg:min-w-40",
-            "3xl:px-7 3xl:py-3.5 3xl:text-sm 3xl:min-w-[170px]",
-            "max-xs:px-[14px] max-xs:py-2.5 max-xs:text-[11px] max-xs:min-h-10 max-xs:min-w-[110px]",
-            "landscape:max-h-[500px]:w-11 landscape:max-h-[500px]:min-w-0 landscape:max-h-[500px]:gap-0 landscape:max-h-[500px]:px-3 landscape:max-h-[500px]:py-2.5 landscape:max-h-[500px]:text-[11px] landscape:max-h-[500px]:min-h-10",
-            "md:landscape:max-h-[500px]:w-auto md:landscape:max-h-[500px]:min-w-[130px] md:landscape:max-h-[500px]:gap-2 md:landscape:max-h-[500px]:px-[18px] md:landscape:max-h-[500px]:py-[11px]",
           )}
         >
-          <span aria-hidden className="text-[14px] md:text-[15px] lg:text-base">{wallOpen ? "✕" : "💬"}</span>
-          <span className={cn(
-            "flex-none text-center font-display text-xs font-medium leading-none tracking-[0.2em] opacity-75 min-w-14",
-            "md:text-[13px] md:min-w-16",
-            "lg:text-[13px] lg:min-w-[68px]",
-            "3xl:text-sm 3xl:min-w-[72px]",
-            "landscape:max-h-[500px]:hidden",
-            "md:landscape:max-h-[500px]:inline md:landscape:max-h-[500px]:text-xs md:landscape:max-h-[500px]:min-w-14",
-          )}>
+          <span aria-hidden className="text-[16px]">{wallOpen ? "✕" : "💬"}</span>
+          <span className="hidden">
             {wallOpen ? "HIDE" : "VIEW"}
           </span>
         </button>
@@ -705,32 +709,19 @@ export default function Home() {
           aria-label={`${inputOpen ? "Hide" : "Show"} message input`}
           aria-pressed={inputOpen}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-2 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-[18px] py-3 text-xs font-medium tracking-[0.18em] text-neon-magenta backdrop-blur-[16px] shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-11 min-w-[132px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta backdrop-blur-[16px] shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
             inputOpen && "bg-[rgba(255,0,170,0.2)] text-bg-deep shadow-[0_0_24px_rgba(255,0,170,0.6)]",
-            "md:px-[22px] md:py-[13px] md:text-[13px] md:min-h-[46px] md:min-w-[150px]",
-            "lg:px-6 lg:py-3.5 lg:text-[13px] lg:min-h-12 lg:min-w-40",
-            "3xl:px-7 3xl:py-3.5 3xl:text-sm 3xl:min-w-[170px]",
-            "max-xs:px-[14px] max-xs:py-2.5 max-xs:text-[11px] max-xs:min-h-10 max-xs:min-w-[110px]",
-            "landscape:max-h-[500px]:w-11 landscape:max-h-[500px]:min-w-0 landscape:max-h-[500px]:gap-0 landscape:max-h-[500px]:px-3 landscape:max-h-[500px]:py-2.5 landscape:max-h-[500px]:text-[11px] landscape:max-h-[500px]:min-h-10",
-            "md:landscape:max-h-[500px]:w-auto md:landscape:max-h-[500px]:min-w-[130px] md:landscape:max-h-[500px]:gap-2 md:landscape:max-h-[500px]:px-[18px] md:landscape:max-h-[500px]:py-[11px]",
           )}
         >
-          <span aria-hidden className="text-[14px] md:text-[15px] lg:text-base">{inputOpen ? "✕" : "✏️"}</span>
-          <span className={cn(
-            "flex-none text-center font-display text-xs font-medium leading-none tracking-[0.2em] opacity-75 min-w-14",
-            "md:text-[13px] md:min-w-16",
-            "lg:text-[13px] lg:min-w-[68px]",
-            "3xl:text-sm 3xl:min-w-[72px]",
-            "landscape:max-h-[500px]:hidden",
-            "md:landscape:max-h-[500px]:inline md:landscape:max-h-[500px]:text-xs md:landscape:max-h-[500px]:min-w-14",
-          )}>
+          <span aria-hidden className="text-[16px]">{inputOpen ? "✕" : "✏️"}</span>
+          <span className="hidden">
             {inputOpen ? "CLOSE" : "SIGNAL"}
           </span>
         </button>
       </div>
       )}
 
-      <footer className="flex flex-none flex-wrap items-center justify-center gap-2.5 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] font-mono text-[9px] tracking-[0.25em] text-text-dim sm:px-5 sm:py-3.5 sm:pb-[calc(14px+env(safe-area-inset-bottom,0px))] sm:text-[10px] md:px-8 md:py-[18px] md:pb-[calc(18px+env(safe-area-inset-bottom,0px))] md:text-[11px] lg:px-9 lg:py-[18px] lg:pb-[calc(18px+env(safe-area-inset-bottom,0px))] 3xl:px-12 3xl:py-5 3xl:pb-[calc(20px+env(safe-area-inset-bottom,0px))] 3xl:text-xs">
+      <footer className="fixed bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-center gap-2.5 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] font-mono text-[9px] tracking-[0.25em] text-text-dim sm:px-5 sm:py-3.5 sm:pb-[calc(14px+env(safe-area-inset-bottom,0px))] sm:text-[10px] md:px-8 md:py-[18px] md:pb-[calc(18px+env(safe-area-inset-bottom,0px))] md:text-[11px] lg:px-9 lg:py-[18px] lg:pb-[calc(18px+env(safe-area-inset-bottom,0px))] 3xl:px-12 3xl:py-5 3xl:pb-[calc(20px+env(safe-area-inset-bottom,0px))] 3xl:text-xs">
         <span>RADIO AI</span>
         <span className="opacity-40">·</span>
         <span>live broadcast system</span>

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 import { resolveUnderPublic, PUBLIC_ROOT } from "@/lib/upload-path";
 import fs from "fs";
 import path from "path";
@@ -69,10 +69,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const buffer = Buffer.from(await file.arrayBuffer());
   fs.writeFileSync(fileAbs, buffer);
 
-  await prisma.workflow.update({
+  await withBusyRetry(() => prisma.workflow.update({
     where: { id },
     data: { refAudioPath: relPath },
-  });
+  }));
 
   return NextResponse.json({ refAudioPath: relPath, url: `/uploads/ref-audio/${id}/${filename}` });
 }
@@ -92,10 +92,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
   }
 
-  await prisma.workflow.update({
+  await withBusyRetry(() => prisma.workflow.update({
     where: { id },
     data: { refAudioPath: null },
-  });
+  }));
 
   return NextResponse.json({ success: true });
 }

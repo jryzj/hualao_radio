@@ -65,6 +65,14 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
         "md:right-5 md:w-[300px] md:max-h-[calc(100dvh-32px)]",
         "lg:right-7 lg:w-[320px]",
         "3xl:right-9 3xl:w-[360px]",
+        // Landscape short — re-anchor to the TOP-RIGHT and cap height.
+        // The default `top-1/2 -translate-y-1/2` centers the panel
+        // vertically on the right edge, which collides with the
+        // bottom-right FAB stack on phone landscape (360–420h). Moving
+        // it to top + removing the vertical centering clears the FAB
+        // area while keeping the slide-in-from-right animation.
+        "landscape-short:top-3 landscape-short:bottom-auto landscape-short:max-h-[200px] landscape-short:translate-y-0",
+        "landscape-shorter:top-2.5 landscape-shorter:bottom-auto landscape-shorter:max-h-[170px] landscape-shorter:translate-y-0",
       )}
     >
       <div className="flex flex-none flex-col border-0 bg-transparent p-0 shadow-none outline-none [&>*]:w-full">

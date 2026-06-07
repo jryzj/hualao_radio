@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 
 export async function GET() {
   const personas = await prisma.persona.findMany();
@@ -19,10 +19,15 @@ export async function POST(req: NextRequest) {
   if (typeof body.prompt !== "string" || !body.prompt.trim()) {
     return NextResponse.json({ error: "prompt is required" }, { status: 400 });
   }
+  // TypeScript control-flow narrowing is per-scope and doesn't carry
+  // into a callback closure, so capture the narrowed strings as local
+  // consts before handing them to withBusyRetry.
+  const name = body.name.trim();
+  const prompt = body.prompt;
   try {
-    const persona = await prisma.persona.create({
-      data: { name: body.name.trim(), prompt: body.prompt },
-    });
+    const persona = await withBusyRetry(() => prisma.persona.create({
+      data: { name, prompt },
+    }));
     return NextResponse.json(persona);
   } catch {
     console.error("[api/admin/personas POST] error");

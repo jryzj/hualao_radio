@@ -30,6 +30,60 @@
  * `--breakpoint-*`, `--animate-*` from @theme and auto-generates
  * utility classes + CSS variables on :root at build time.
  */
+/* `wide` — triggers the 2-col split layout used by RadioPlayer and
+ * MessageWall. Fires when EITHER the viewport is wide enough for a
+ * split (>= 1024px) OR the viewport is in landscape with a short
+ * height (<= 500px — typical phone-in-landscape). The latter case is
+ * what desktop media queries miss: an iPhone in landscape is
+ * typically 800-900px wide (below the 1024 `lg` threshold) but only
+ * 360-410px tall, so a 1-col vertical stack overflows the viewport.
+ * The `wide` variant collapses both into one selector. The minimum
+ * width threshold was lowered from 1024px to 768px so the 2-col
+ * split kicks in earlier on mid-range desktop viewports. */
+@custom-variant wide {
+  @media (min-width: 768px), (orientation: landscape) and (max-height: 500px) {
+    @slot;
+  }
+}
+
+/* Phone-landscape variants — used for layout adjustments on short
+ * landscape viewports (typical phone-in-landscape: 360–420px tall).
+ * These are SEPARATE from `wide` so they only fire on phone landscape,
+ * not on desktop landscape (where `wide` already handles 2-col via
+ * min-width: 1024px).
+ *
+ * Why custom variants instead of `landscape:max-h-[500px]:` stacking:
+ * Tailwind v4's built-in `landscape:` variant doesn't reliably stack
+ * with arbitrary `max-h-[…]:` media queries in this project — the
+ * classes appear in the rendered HTML but no CSS rules are emitted.
+ * Explicit custom variants guarantee the CSS is generated. */
+@custom-variant landscape-short {
+  @media (orientation: landscape) and (max-height: 500px) {
+    @slot;
+  }
+}
+
+@custom-variant landscape-shorter {
+  @media (orientation: landscape) and (max-height: 420px) {
+    @slot;
+  }
+}
+
+@custom-variant landscape-xshort {
+  @media (orientation: landscape) and (max-height: 360px) {
+    @slot;
+  }
+}
+
+/* Fires for ANY landscape orientation. Used to override the
+ * `wide` 2-col layout: in landscape, the visualizer swaps
+ * to the right column (text moves to the left). */
+@custom-variant landscape-any {
+  @media (orientation: landscape) {
+    @slot;
+  }
+}
+
 @theme {
   /* Surfaces */
   --color-bg-deep: #050509;
@@ -228,11 +282,14 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
-*, *::before, *::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
+/* CSS reset — Tailwind v4's preflight (emitted inside @layer base)
+ * already sets `*, ::after, ::before, ::backdrop { box-sizing: border-box;
+ * border: 0 solid; margin: 0; padding: 0 }`. Don't add another reset
+ * here: the selector `*, *::before, *::after` is similar enough to the
+ * preflight selector that Tailwind's PostCSS hoists this block to the
+ * top level (un-layered), where it beats @layer utilities and clobbers
+ * every padding/margin utility (card padding renders as 0px, ON AIR
+ * pill padding renders as 0px, etc.). The preflight alone is enough. */
 
 html {
   font-size: 16px;
@@ -354,6 +411,110 @@ input, select, textarea {
 
 .fade-in { animation: fade-in 0.4s var(--ease-out) forwards; }
 .fade-slide-up { animation: fade-slide-up 0.5s var(--ease-out) forwards; }
+
+/* ====== Card surface utilities ====== */
+
+/* `.card-scanlines` — wraps an inner overlay that echoes the body's
+ * scanline effect (see body::after). Apply to a `relative` parent;
+ * the pseudo-element covers the full content box and is non-blocking.
+ * Tints to cyan at very low alpha to keep the editorial register —
+ * just enough to add depth without competing with the visualizer. */
+.card-scanlines {
+  position: relative;
+}
+.card-scanlines::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent 0,
+    transparent 3px,
+    rgba(0, 240, 255, 0.018) 3px,
+    rgba(0, 240, 255, 0.018) 4px
+  );
+  pointer-events: none;
+  z-index: 0;
+  mix-blend-mode: screen;
+}
+
+/* `.telemetry-strip` — the bottom diagnostic row in the radio player
+ * and any future status readouts. Mono font, dim by default, with
+ * a `telemetry-strip__label` slot for a bracketed label. Items inside
+ * a `.telemetry-strip__items` flex row get the standard ` · `
+ * separator via gap and a `::before` dot on each child after the
+ * first. Keeps the markup clean (no manual `<span aria-hidden>` dots
+ * in JSX). */
+.telemetry-strip {
+  font-family: var(--font-mono);
+  color: var(--text-dim);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.telemetry-strip__label {
+  display: block;
+  text-align: center;
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  color: var(--neon-cyan-dim);
+  opacity: 0.7;
+  margin-bottom: 4px;
+}
+.telemetry-strip__items {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0 6px;
+  font-size: 9px;
+}
+.telemetry-strip__items > * + *::before {
+  content: "·";
+  margin-right: 6px;
+  opacity: 0.4;
+}
+@media (min-width: 1024px) {
+  .telemetry-strip__items { font-size: 11px; gap: 0 10px; }
+  .telemetry-strip__items > * + *::before { margin-right: 10px; }
+}
+@media (orientation: landscape) and (max-height: 360px) {
+  .telemetry-strip__label { font-size: 7px; margin-bottom: 2px; letter-spacing: 0.28em; }
+  .telemetry-strip__items { font-size: 8px; gap: 0 4px; }
+  .telemetry-strip__items > * + *::before { margin-right: 4px; }
+}
+
+/* `.dial-segmented` — a 5-segment "filled channel" used as the
+ * visual track for the volume slider. The actual `<input type=range>`
+ * sits invisibly on top of this (positioned absolute, transparent
+ * track, glowing thumb) for accessibility. Each segment stretches
+ * to fill 1/5 of the container (flex: 1) so the visual scales with
+ * the slider's allocated width. The first `filled` ones (set inline
+ * based on `volume`) glow cyan, the rest are dim elevated-bg. */
+.dial-segmented {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  width: 100%;
+  height: 18px;
+  padding: 3px 4px;
+  gap: 3px;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+.dial-segmented__seg {
+  flex: 1;
+  display: block;
+  background: var(--bg-elevated);
+  opacity: 0.7;
+  border-radius: 1px;
+  transition: background 0.2s var(--ease-out), box-shadow 0.2s var(--ease-out), opacity 0.2s var(--ease-out);
+}
+.dial-segmented__seg--on {
+  background: var(--neon-cyan);
+  opacity: 1;
+  box-shadow: 0 0 6px rgba(0, 240, 255, 0.7);
+}
 
 .sr-only {
   position: absolute;

@@ -52,6 +52,56 @@ const wss = new WebSocketServer({
 const audioClients = new Set<WebSocket>();
 const messageClients = new Set<WebSocket>();
 
+// Replay buffer for late-joining audio clients. Each /broadcast chunk
+// is pushed; the oldest is dropped when the array grows past
+// `audioBufferMaxSize`. On a new /audio WS connect, the entire buffer
+// is drained to the new client in order, then a {"type":"replay_end"}
+// JSON marker is sent, then live broadcasts continue normally.
+//
+// The max size is driven by the same AudioBufferConfig.prebufferSentences
+// the client uses to decide "buffer ready, start playing" — so a late
+// joiner gets exactly enough to flip its own prebuffer check green and
+// begin playback immediately. Refreshed by polling Next's
+// /api/audio-buffer on startup + every 10s so admin changes propagate
+// without a ws-server restart. In non-"sentences" modes the server
+// still uses prebufferSentences as a chunk count; the client may need
+// a few live chunks to fully satisfy its own (seconds/both) threshold,
+// which is fine.
+const audioBuffer: Buffer[] = [];
+let audioBufferMaxSize = 3;
+// Per-client "drain in progress" flag. /broadcast skips a client while
+// this is true so a chunk pushed during drain isn't sent twice (once
+// via /broadcast, once via the drain loop on the next iteration). The
+// flag is set before the drain starts and cleared after, all in the
+// same synchronous tick — Node's single-threaded event loop guarantees
+// /broadcast can't observe a half-applied state.
+const clientBuffering = new WeakMap<WebSocket, boolean>();
+
+const NEXT_BASE = process.env.NEXT_BASE_URL ?? "http://127.0.0.1:3000";
+
+async function refreshAudioBufferConfig(): Promise<void> {
+  try {
+    const res = await fetch(`${NEXT_BASE}/api/audio-buffer`, {
+      signal: AbortSignal.timeout(2000),
+    });
+    if (!res.ok) return;
+    const cfg = await res.json();
+    if (
+      cfg &&
+      typeof cfg.prebufferSentences === "number" &&
+      cfg.prebufferSentences > 0
+    ) {
+      audioBufferMaxSize = Math.floor(cfg.prebufferSentences);
+    }
+  } catch {
+    // Best-effort. Next may not be up at startup; the 10s poll will
+    // pick it up. Never crash the WS server over a config refresh.
+  }
+}
+refreshAudioBufferConfig();
+const configPoll = setInterval(refreshAudioBufferConfig, 10_000);
+configPoll.unref();
+
 // HTTP server for internal broadcast commands. Bound to loopback only
 // so external hosts can't reach it (defense in depth — the token check
 // below is the primary control).
@@ -90,10 +140,14 @@ const httpServer = http.createServer((req, res) => {
         const buffer = Buffer.from(audio, "base64");
         console.log(`[HTTP] broadcast request, ${audioClients.size} clients, ${buffer.length} bytes`);
         for (const client of audioClients) {
-          if (client.readyState === WebSocket.OPEN) {
+          if (client.readyState === WebSocket.OPEN && !clientBuffering.get(client)) {
             client.send(buffer);
           }
         }
+        // Push to replay buffer and trim. Trim-on-push keeps the array
+        // bounded regardless of how often /broadcast is hit.
+        audioBuffer.push(buffer);
+        while (audioBuffer.length > audioBufferMaxSize) audioBuffer.shift();
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true, clients: audioClients.size }));
       } catch {
@@ -108,6 +162,9 @@ const httpServer = http.createServer((req, res) => {
         client.send(JSON.stringify({ type: "flush" }));
       }
     }
+    // Flush = engine stop / theme change. Old audio has no meaning for
+    // anyone connecting after this, so clear the replay buffer too.
+    audioBuffer.length = 0;
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ ok: true }));
   } else if (req.method === "POST" && req.url === "/broadcast-message") {
@@ -170,8 +227,34 @@ wss.on("connection", (ws, req) => {
   const path = url.pathname;
 
   if (path === "/audio") {
+    // Drain the replay buffer to the new client BEFORE adding it to
+    // audioClients would be wrong: any /broadcast landing in between
+    // drain and add would be missed. So we add first, then mark
+    // "buffering" so the broadcast loop skips this client, then drain
+    // (which may pick up chunks pushed by concurrent /broadcasts), then
+    // emit the replay_end marker, then clear the flag. The flag flip
+    // and the drain are all in this synchronous block, so /broadcast
+    // can't observe a half-applied state.
+    clientBuffering.set(ws, true);
     audioClients.add(ws);
-    ws.on("close", () => audioClients.delete(ws));
+    if (audioBuffer.length > 0) {
+      console.log(`[WS] /audio client connected, draining ${audioBuffer.length} chunks (max=${audioBufferMaxSize})`);
+      for (const chunk of audioBuffer) {
+        if (ws.readyState === WebSocket.OPEN) {
+          ws.send(chunk, { binary: true });
+        }
+      }
+    } else {
+      console.log(`[WS] /audio client connected, empty replay buffer (max=${audioBufferMaxSize})`);
+    }
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "replay_end" }));
+    }
+    clientBuffering.set(ws, false);
+    ws.on("close", () => {
+      audioClients.delete(ws);
+      clientBuffering.delete(ws);
+    });
     // The audio path is server-push only. Clients are not allowed to
     // send binary frames back to the server for re-broadcast: any
     // client that does so is treated as a misuse. We deliberately do

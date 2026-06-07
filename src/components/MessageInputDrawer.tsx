@@ -105,7 +105,7 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
         // Tiny phones (xs ≤ 380px): tighter padding
         "max-xs:px-3.5 max-xs:pb-[calc(14px+env(safe-area-inset-bottom,0px))]",
         // Landscape phones (h ≤ 500): vertical-centered floating card
-        "landscape:max-h-[500px]:top-1/2 landscape:max-h-[500px]:bottom-auto landscape:max-h-[500px]:left-auto landscape:max-h-[500px]:right-4 landscape:max-h-[500px]:max-h-none landscape:max-h-[500px]:h-auto landscape:max-h-[500px]:max-w-[380px] landscape:max-h-[500px]:w-[380px] landscape:max-h-[500px]:rounded-[14px] landscape:max-h-[500px]:border landscape:max-h-[500px]:border-border-cyan-strong landscape:max-h-[500px]:px-[18px] landscape:max-h-[500px]:py-3.5",
+        "landscape-short:top-1/2 landscape-short:bottom-auto landscape-short:left-auto landscape-short:right-4 landscape-short:max-h-none landscape-short:h-auto landscape-short:max-w-[380px] landscape-short:w-[380px] landscape-short:rounded-[14px] landscape-short:border landscape-short:border-border-cyan-strong landscape-short:px-[18px] landscape-short:py-3.5",
       )}
       // Landscape closed-state transform override — the Tailwind utilities
       // set `translate-y-full` (mobile) but landscape needs `translate(120%, -50%)`.
@@ -116,7 +116,7 @@ export function MessageInputDrawer({ open, onToggle, onSubmit, submissionStatus 
         className={cn(
           "mx-auto mb-3 h-1 w-10 rounded-sm bg-border-cyan-strong",
           "md:hidden",
-          "landscape:max-h-[500px]:hidden",
+          "landscape-short:hidden",
         )}
       />
       <div className="mb-3 flex items-center justify-between border-b border-[rgba(0,240,255,0.1)] bg-transparent px-[2px] pb-3 pt-1">

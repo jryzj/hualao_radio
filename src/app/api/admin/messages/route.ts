@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { prisma, withBusyRetry } from "@/lib/prisma";
 import { liveEngine } from "@/lib/live-engine";
 
 async function broadcast(payload: object) {
@@ -39,10 +39,10 @@ export async function POST(req: NextRequest) {
     const prev = await prisma.message.findUnique({ where: { id: body.id } });
     if (!prev) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    const updated = await prisma.message.update({
+    const updated = await withBusyRetry(() => prisma.message.update({
       where: { id: body.id },
       data: { status: body.status, reviewedAt: new Date() },
-    });
+    }));
 
     if (prev.status !== "approved" && updated.status === "approved") {
       await liveEngine.injectMessage(updated.id);
@@ -68,10 +68,10 @@ export async function POST(req: NextRequest) {
     const prev = await prisma.message.findUnique({ where: { id: body.id } });
     if (!prev) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-    const updated = await prisma.message.update({
+    const updated = await withBusyRetry(() => prisma.message.update({
       where: { id: body.id },
       data: { isVisible: body.visible },
-    });
+    }));
 
     const wasOnWall = prev.status === "approved" && prev.isVisible;
     const isOnWall = updated.status === "approved" && updated.isVisible;
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     if (!prev) return NextResponse.json({ error: "not found" }, { status: 404 });
 
     const wasOnWall = prev.status === "approved" && prev.isVisible;
-    await prisma.message.delete({ where: { id: body.id } });
+    await withBusyRetry(() => prisma.message.delete({ where: { id: body.id } }));
 
     if (wasOnWall) {
       await broadcast({ type: "message_hidden", id: body.id });
@@ -99,8 +99,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, id: body.id });
   }
 
-  const message = await prisma.message.create({
+  const message = await withBusyRetry(() => prisma.message.create({
     data: { content: body.content, authorName: body.authorName ?? "匿名用户" },
-  });
+  }));
   return NextResponse.json(message);
 }
