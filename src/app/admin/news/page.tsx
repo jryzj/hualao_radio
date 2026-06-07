@@ -63,6 +63,7 @@ export default function NewsPage() {
   const [opmlInfo, setOpmlInfo] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [sourcesCollapsed, setSourcesCollapsed] = useState(false);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [itemsModal, setItemsModal] = useState<ItemsModalData | null>(null);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
@@ -124,6 +125,22 @@ export default function NewsPage() {
     loadAll();
   }
 
+  async function refreshSource(id: string) {
+    setRefreshingId(id);
+    try {
+      const res = await fetch(`/api/admin/news/sources/${id}/refresh`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        alert(`刷新失败：${data.error ?? res.status}`);
+      } else {
+        alert(`刷新成功，新增 ${data.items} 条 items`);
+      }
+    } finally {
+      setRefreshingId(null);
+      loadAll();
+    }
+  }
+
   async function deleteSource(id: string) {
     if (!confirm("确定删除该源？所有相关 item 也会被级联删除。")) return;
     await fetch(`/api/admin/news/sources/${id}`, { method: "DELETE" });
@@ -144,6 +161,17 @@ export default function NewsPage() {
     } finally {
       setItemsLoading(false);
     }
+  }
+
+  async function deleteDisabledSources() {
+    const disabledCount = stats?.sourcesDisabled ?? 0;
+    if (disabledCount === 0) { alert("没有已禁用的源"); return; }
+    if (!confirm(`确定全部删除 ${disabledCount} 个状态为 disabled 的源？所有关联 item 也会被级联删除。`)) return;
+    const res = await fetch("/api/admin/news/sources/batch-delete-disabled", { method: "DELETE" });
+    if (!res.ok) { alert("批量删除失败"); return; }
+    const data = await res.json();
+    alert(`已删除 ${data.deleted} 个已禁用的源`);
+    loadAll();
   }
 
   async function refreshAll() {
@@ -183,6 +211,7 @@ export default function NewsPage() {
   const inputClass = "mb-2 block w-full max-w-[480px] rounded border border-[#2a2a32] bg-[#0f0f14] px-2.5 py-2 text-[13px] text-[#e8e6e0]";
   const btnClass = "mr-2 cursor-pointer rounded border-0 bg-[#e8a84c] px-3.5 py-1.5 text-xs font-semibold text-[#0a0a0c]";
   const btnSecondaryClass = "mr-2 cursor-pointer rounded border-0 bg-[#2a2a32] px-3.5 py-1.5 text-xs text-[#e8e6e0]";
+  const btnDangerClass = "mr-2 cursor-pointer rounded border-0 bg-[#a03030] px-3.5 py-1.5 text-xs font-semibold text-[#e8e6e0]";
   const fieldLabelClass = "mb-1 block text-[11px] text-[#9a958c]";
   const statusActiveClass = "text-[#7ed87e]";
   const statusDisabledClass = "text-[#d87e7e]";
@@ -214,8 +243,11 @@ export default function NewsPage() {
             上传 OPML 文件
             <input type="file" accept=".opml,.xml" onChange={handleOpmlUpload} className="hidden" />
           </label>
-          <button className={btnSecondaryClass} onClick={refreshAll} disabled={refreshing}>
+           <button className={btnSecondaryClass} onClick={refreshAll} disabled={refreshing}>
             {refreshing ? "刷新中..." : "立即刷新全部"}
+          </button>
+          <button className={btnDangerClass} onClick={deleteDisabledSources}>
+            批量删除已禁用源（{stats?.sourcesDisabled ?? 0}）
           </button>
           {opmlError && <span className="ml-3 text-xs text-[#d87e7e]">{opmlError}</span>}
           {opmlInfo && <span className="ml-3 text-xs text-[#7ed87e]">{opmlInfo}</span>}
@@ -285,6 +317,9 @@ export default function NewsPage() {
                     <td className="border-b border-[#1a1a20] px-2.5 py-2 text-[#e8e6e0]">
                       <button className={btnSecondaryClass} onClick={() => toggleSource(s.id)}>
                         {s.status === "active" ? "禁用" : "启用"}
+                      </button>
+                      <button className={btnSecondaryClass} onClick={() => refreshSource(s.id)} disabled={refreshingId === s.id}>
+                        {refreshingId === s.id ? "刷新中..." : "刷新"}
                       </button>
                       <button className={btnSecondaryClass} onClick={() => deleteSource(s.id)}>
                         删除

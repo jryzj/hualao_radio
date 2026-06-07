@@ -8,6 +8,7 @@ interface Workflow {
   inputParams: string;
   refAudioPath: string | null;
   refText: string | null;
+  instruct: string;
   speed: number;
 }
 
@@ -17,14 +18,17 @@ interface CreateForm {
   inputParams: string;
   speed: string;
   refText: string;
+  instruct: string;
   refAudioFile: File | null;
 }
 
 export default function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [form, setForm] = useState<CreateForm>({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", refAudioFile: null });
+  const [form, setForm] = useState<CreateForm>({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", instruct: "", refAudioFile: null });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [refTextEdits, setRefTextEdits] = useState<Record<string, string>>({});
+  const [speedEdits, setSpeedEdits] = useState<Record<string, string>>({});
+  const [instructEdits, setInstructEdits] = useState<Record<string, string>>({});
 
   useEffect(() => { reload(); }, []);
   async function reload() { setWorkflows(await (await fetch("/api/admin/workflows")).json()); }
@@ -42,6 +46,7 @@ export default function WorkflowsPage() {
         inputParams: inputParams.split(",").map(s => s.trim()),
         speed: parseFloat(speed),
         refText: refText || null,
+        instruct: form.instruct,
       }),
     });
     if (!res.ok) {
@@ -62,7 +67,7 @@ export default function WorkflowsPage() {
         alert(`工作流已创建，但参考音频上传失败: ${err.error ?? upRes.status}`);
       }
     }
-    setForm({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", refAudioFile: null });
+    setForm({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", instruct: "", refAudioFile: null });
     reload();
   }
 
@@ -99,22 +104,33 @@ export default function WorkflowsPage() {
     reload();
   }
 
-  async function saveRefText(workflowId: string, newVal: string, currentVal: string | null) {
-    const normalized = newVal || null;
-    if (normalized === currentVal) return;
-    const res = await fetch(`/api/admin/workflows/${workflowId}`, {
+  async function saveWorkflow(w: Workflow) {
+    const newSpeed = parseFloat(getSpeedEditVal(w.id, w.speed));
+    const newRefText = getEditVal(w.id, w.refText) || null;
+    const newInstruct = getInstructEditVal(w.id, w.instruct);
+    const body: Record<string, unknown> = {};
+    if (Number.isFinite(newSpeed) && newSpeed !== w.speed) body.speed = newSpeed;
+    if (newRefText !== w.refText) body.refText = newRefText;
+    if (newInstruct !== w.instruct) body.instruct = newInstruct;
+    if (Object.keys(body).length === 0) return;
+    const res = await fetch(`/api/admin/workflows/${w.id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refText: normalized }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert(`ref_text 保存失败: ${err.error ?? res.status}`);
+      alert(`保存失败: ${err.error ?? res.status}`);
     }
+    setSpeedEdits(prev => { const n = { ...prev }; delete n[w.id]; return n; });
+    setRefTextEdits(prev => { const n = { ...prev }; delete n[w.id]; return n; });
+    setInstructEdits(prev => { const n = { ...prev }; delete n[w.id]; return n; });
     reload();
   }
 
   const getEditVal = (id: string, refText: string | null) => refTextEdits[id] ?? refText ?? "";
+  const getInstructEditVal = (id: string, instruct: string) => instructEdits[id] ?? instruct ?? "";
+  const getSpeedEditVal = (id: string, speed: number) => speedEdits[id] ?? String(speed);
 
   const s = {
     page: { padding: "24px", maxWidth: 900 },
@@ -152,6 +168,15 @@ export default function WorkflowsPage() {
           <input placeholder="逗号分隔参数" value={form.inputParams} onChange={e => setForm({ ...form, inputParams: e.target.value })} style={s.input} />
         </label>
         <label style={s.label}>
+          instruct（节点 35 instruct）
+          <input
+            placeholder="instruct 值"
+            value={form.instruct}
+            onChange={e => setForm({ ...form, instruct: e.target.value })}
+            style={s.input}
+          />
+        </label>
+        <label style={s.label}>
           ref_text（克隆工作流节点 35 参考文本）
           <input
             placeholder="如：我们下期再见，记得点赞关注哦！拜拜！"
@@ -179,6 +204,18 @@ export default function WorkflowsPage() {
             <div style={s.itemMeta}>
               <span>speed: <strong style={{ color: "#9a958c" }}>{w.speed}</strong></span>
               {w.inputParams && <span>params: {w.inputParams}</span>}
+            </div>
+            <div style={s.refTextRow}>
+              <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>speed:</span>
+              <input
+                type="number"
+                step="0.1"
+                min="0.5"
+                max="3"
+                value={getSpeedEditVal(w.id, w.speed)}
+                onChange={e => setSpeedEdits({ ...speedEdits, [w.id]: e.target.value })}
+                style={{ ...s.input, width: 100 }}
+              />
             </div>
             <div style={s.audioRow}>
               {w.refAudioPath ? (
@@ -219,19 +256,35 @@ export default function WorkflowsPage() {
               <button onClick={() => remove(w.id)} style={{ ...s.delBtn, marginLeft: "auto" }}>删除工作流</button>
             </div>
             <div style={s.refTextRow}>
+              <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>instruct:</span>
+              <input
+                value={getInstructEditVal(w.id, w.instruct)}
+                onChange={e => setInstructEdits({ ...instructEdits, [w.id]: e.target.value })}
+                placeholder="（未设置）"
+                style={{ ...s.input, flex: 1, minWidth: 240 }}
+              />
+            </div>
+            <div style={s.refTextRow}>
               <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>ref_text:</span>
               <input
                 value={getEditVal(w.id, w.refText)}
                 onChange={e => setRefTextEdits({ ...refTextEdits, [w.id]: e.target.value })}
-                onBlur={e => saveRefText(w.id, e.target.value, w.refText)}
                 placeholder="（未设置）"
                 style={{ ...s.input, flex: 1, minWidth: 240 }}
               />
-              <button
-                onClick={() => saveRefText(w.id, getEditVal(w.id, w.refText), w.refText)}
-                disabled={getEditVal(w.id, w.refText) === (w.refText ?? "")}
-                style={getEditVal(w.id, w.refText) === (w.refText ?? "") ? s.saveBtnDisabled : s.saveBtn}
-              >保存</button>
+              {(() => {
+                const speedChanged = getSpeedEditVal(w.id, w.speed) !== String(w.speed);
+                const refTextChanged = getEditVal(w.id, w.refText) !== (w.refText ?? "");
+                const instructChanged = getInstructEditVal(w.id, w.instruct) !== w.instruct;
+                const hasChanges = speedChanged || refTextChanged || instructChanged;
+                return (
+                  <button
+                    onClick={() => saveWorkflow(w)}
+                    disabled={!hasChanges}
+                    style={hasChanges ? s.saveBtn : s.saveBtnDisabled}
+                  >保存</button>
+                );
+              })()}
             </div>
           </li>
         ))}
