@@ -528,6 +528,25 @@ input, select, textarea {
   max-height: calc(100dvh - 32px);
 }
 
+/* iOS 14 Safari fallback: aspect-ratio not supported (added Safari 15).
+   The visualizer collapses to 0 height without 1:1 sizing.
+   Use padding-bottom: 100% hack to preserve square aspect. */
+@supports not (aspect-ratio: 1/1) {
+  .aspect-square {
+    position: relative !important;
+    height: 0 !important;
+    padding-bottom: 100% !important;
+    overflow: hidden !important;
+  }
+  .aspect-square > * {
+    position: absolute !important;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+  }
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
