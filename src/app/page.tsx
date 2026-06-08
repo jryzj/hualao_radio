@@ -695,7 +695,7 @@ export default function Home() {
           aria-label={`${wallOpen ? "Hide" : "Show"} message panel`}
           aria-pressed={wallOpen}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan backdrop-blur-[16px] shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)] active:scale-90",
+            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan backdrop-blur-[16px] shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-[background,border-color,box-shadow] duration-[250ms] ease-out-soft touch-manipulation min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)] active:scale-90",
             wallOpen && "border-neon-cyan bg-[rgba(0,240,255,0.18)] text-bg-deep shadow-[0_0_24px_rgba(0,240,255,0.6)]",
           )}
         >
@@ -709,7 +709,7 @@ export default function Home() {
           aria-label={`${inputOpen ? "Hide" : "Show"} message input`}
           aria-pressed={inputOpen}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta backdrop-blur-[16px] shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)] active:scale-90",
+            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta backdrop-blur-[16px] shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-[background,border-color,box-shadow] duration-[250ms] ease-out-soft touch-manipulation min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)] active:scale-90",
             inputOpen && "bg-[rgba(255,0,170,0.2)] text-bg-deep shadow-[0_0_24px_rgba(255,0,170,0.6)]",
           )}
         >

@@ -9,11 +9,13 @@
 // most needed vendor prefixes (e.g. `-webkit-backdrop-filter` for
 // Safari). Add other plugins here only if needed.
 
-// iOS 14 Safari compat: strip @layer from Tailwind v4 output.
-// Safari 14 doesn't support CSS @layer (added in Safari 15.4) and
-// ignores entire @layer blocks, discarding all utility classes.
-const removeLayer = {
-  postcssPlugin: "remove-layer",
+// iOS 14 Safari compat: strip @layer and @property from Tailwind v4 output.
+// Safari 14 doesn't support CSS @layer (added in Safari 15.4) and ignores
+// entire @layer blocks, discarding all utility classes. Safari 14 also
+// doesn't support @property (added in Safari 15.4) which can corrupt the
+// CSS parser state, breaking downstream rules.
+const removeUnsupported = {
+  postcssPlugin: "remove-unsupported",
   AtRule: {
     layer: (atRule) => {
       if (atRule.nodes && atRule.nodes.length > 0) {
@@ -22,13 +24,16 @@ const removeLayer = {
         atRule.remove();
       }
     },
+    property: (atRule) => {
+      atRule.remove();
+    },
   },
 };
 
 const config = {
   plugins: [
     "@tailwindcss/postcss",
-    removeLayer,
+    removeUnsupported,
   ],
 };
 

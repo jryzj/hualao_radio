@@ -552,7 +552,7 @@ export function RadioPlayer({
             onClick={onTogglePlay}
             aria-label={isPlaying ? "Stop playback" : "Start playback"}
             className={cn(
-              "group relative inline-flex cursor-pointer items-center gap-2.5 overflow-hidden rounded-md border-[1.5px] px-5 py-2 font-display font-semibold tracking-[0.22em] transition-all duration-200 ease-out-soft supports-[-webkit-touch-callout:none]:min-h-[44px]",
+              "group relative inline-flex cursor-pointer items-center gap-2.5 overflow-hidden rounded-md border-[1.5px] px-5 py-2 font-display font-semibold tracking-[0.22em] transition-[background,border-color,box-shadow,color] duration-200 ease-out-soft touch-manipulation supports-[-webkit-touch-callout:none]:min-h-[44px]",
               "text-[11px] sm:px-6 sm:py-2.5 sm:text-[12px]",
               "md:px-6 md:py-2.5 md:text-[12px] md:tracking-[0.22em]",
               "lg:px-6 lg:py-2 lg:text-[12px] lg:tracking-[0.24em]",
