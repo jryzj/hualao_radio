@@ -59,6 +59,7 @@ next-env.d.ts
 
 # TTS voice-clone reference samples (proprietary voice data, kept locally)
 /workflows/*.flac
+/workflows/*.mp3
 
 # Internal-only project documents (not for the public repo)
 /PRD.md
@@ -77,6 +78,9 @@ next-env.d.ts
 # SQLite WAL and shared-memory files (companions to dev.db)
 *.db-shm
 *.db-wal
+
+# Playwright MCP auto-generated test artifacts (screenshots, page states)
+/.playwright-mcp/
 
 # Script-generated screenshots and visual test artifacts
 /scripts/*.png
