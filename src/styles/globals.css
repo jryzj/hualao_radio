@@ -516,6 +516,18 @@ input, select, textarea {
   box-shadow: 0 0 6px rgba(0, 240, 255, 0.7);
 }
 
+/* iOS 14 Safari fallback: 100dvh not supported (added Safari 15.4).
+   Provide 100vh as the understood value; modern browsers take the
+   later 100dvh declaration via CSS cascade. */
+.min-h-viewport {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.max-h-viewport-offset {
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;

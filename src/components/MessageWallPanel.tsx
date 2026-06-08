@@ -62,7 +62,7 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
         open && "pointer-events-auto visible translate-x-0 -translate-y-1/2 opacity-100",
         // Responsive width/inset — sm=480, md=768, lg=1024, 3xl=1366
         "sm:right-4 sm:w-[280px]",
-        "md:right-5 md:w-[300px] md:max-h-[calc(100dvh-32px)]",
+        "md:right-5 md:w-[300px] md:max-h-viewport-offset",
         "lg:right-7 lg:w-[320px]",
         "3xl:right-9 3xl:w-[360px]",
         // Landscape short — re-anchor to the TOP-RIGHT and cap height.
