@@ -12,7 +12,7 @@
 
 import { prisma, withBusyRetry } from "@/lib/prisma";
 import { getLLMConfig, getNewsConfig, ensureNewsConfig, type NewsConfig as Cfg } from "@/config";
-import { fetchAllSources, type FetchedItem } from "./rss";
+import { fetchAllSources, fetchRssSource, type FetchedItem } from "./rss";
 import { searchRssItems, type FtsResult } from "./fts";
 import { tavilySearch, type TavilyResult } from "./tavily";
 import { formatNewsContext, type NewsItemInput } from "./format";
@@ -84,6 +84,7 @@ class NewsService {
     return await runRssRefresh();
   }
 
+<<<<<<< HEAD
   // Force an immediate refresh of a single source by id.
   async refreshSource(id: string): Promise<{ ok: boolean; items: number; error?: string }> {
     const source = await prisma.rssSource.findUnique({ where: { id } });
@@ -97,6 +98,18 @@ class NewsService {
     const items = await writeItems(id, r.result.items);
     await markSourceSuccess(id, r.result.feedTitle);
     return { ok: true, items };
+=======
+  // Force an immediate RSS refresh of a single source by id. Returns the
+  // per-source outcome so the admin UI can surface a precise error
+  // (e.g. "NOT_FOUND" if the id was deleted between page load and click,
+  // or the underlying parser error from fetchRssSource). On success
+  // `items` is the list of items written to the DB so the caller can
+  // show "fetched N new items" without a second round-trip.
+  async refreshSource(id: string): Promise<
+    { ok: true; items: FetchedItem[] } | { ok: false; error: string }
+  > {
+    return await runSingleSourceRefresh(id);
+>>>>>>> side1
   }
 }
 
@@ -123,6 +136,30 @@ async function runRssRefresh(): Promise<{ fetched: number; failed: number; items
   }
   console.log(`[NewsService] RSS refresh: ${fetched} ok, ${failed} failed, ${items} items`);
   return { fetched, failed, items };
+}
+
+// Refresh a single source by id (used by admin/news "refresh" button).
+// Returned shape matches what the API route expects:
+//   { ok: true, items: FetchedItem[] }              — on success
+//   { ok: false, error: "NOT_FOUND" | "<message>" } — on missing
+//                                                      source or fetch error
+// `writeItems` upserts by (sourceId, link), so a manual refresh is
+// idempotent — re-running it just refreshes `fetchedAt` on existing rows
+// and adds any new items the source has published since last cycle.
+async function runSingleSourceRefresh(id: string): Promise<
+  { ok: true; items: FetchedItem[] } | { ok: false; error: string }
+> {
+  const src = await prisma.rssSource.findUnique({ where: { id } });
+  if (!src) return { ok: false, error: "NOT_FOUND" };
+  const result = await fetchRssSource(src.url);
+  if (!result.ok) {
+    await markSourceFailure(id);
+    return { ok: false, error: result.error ?? "fetch failed" };
+  }
+  const written = await writeItems(id, result.items);
+  await markSourceSuccess(id, result.feedTitle);
+  console.log(`[NewsService] single refresh: ${src.url} → ${written} items`);
+  return { ok: true, items: result.items };
 }
 
 async function markSourceSuccess(id: string, feedTitle?: string) {

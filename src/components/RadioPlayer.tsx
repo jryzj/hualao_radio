@@ -761,15 +761,15 @@ export function RadioPlayer({
         >
           <div
             className={cn(
-              "relative aspect-square w-full",
-              "max-w-[clamp(150px,44vw,190px)]",
-              "sm:max-w-[clamp(190px,45vw,260px)]",
-              "md:max-w-[clamp(260px,38vw,340px)]",
-              "lg:max-w-[clamp(300px,24vw,380px)]",
-              "3xl:max-w-[clamp(340px,22vw,420px)]",
-              "landscape-short:max-w-[clamp(180px,42vh,220px)]",
-              "landscape-shorter:max-w-[clamp(140px,35vh,180px)]",
-              "landscape-xshort:max-w-[clamp(120px,32vh,160px)]",
+              "relative aspect-square",
+              "w-[clamp(150px,44vw,190px)]",
+              "sm:w-[clamp(190px,45vw,260px)]",
+              "md:w-[clamp(260px,38vw,340px)]",
+              "lg:w-[clamp(300px,24vw,380px)]",
+              "3xl:w-[clamp(340px,22vw,420px)]",
+              "landscape-short:w-[clamp(180px,42vh,220px)]",
+              "landscape-shorter:w-[clamp(140px,35vh,180px)]",
+              "landscape-xshort:w-[clamp(120px,32vh,160px)]",
             )}
           >
             <AudioVisualizer analyser={analyser} isPlaying={isPlaying} barCount={48} />

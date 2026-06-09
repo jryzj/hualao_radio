@@ -20,6 +20,11 @@ interface Props {
   variant?: "default" | "panel";
 }
 
+interface LegacyMediaQueryList extends MediaQueryList {
+  addListener(listener: (this: MediaQueryList, ev: MediaQueryListEvent) => void): void;
+  removeListener(listener: (this: MediaQueryList, ev: MediaQueryListEvent) => void): void;
+}
+
 // Vertically-scrolling message wall.
 //
 // Two layouts depending on whether the message list fills the frame:
@@ -50,17 +55,22 @@ export function MessageWall({
   const trackRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const [paused, setPaused] = useState(false);
+  const rafRef = useRef<number | null>(null);
   const [reduced, setReduced] = useState(false);
   const [layout, setLayout] = useState<{ listH: number; frameH: number; gap: number }>({ listH: 0, frameH: 0, gap: 6 });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    setReduced(mq.matches);
+    requestAnimationFrame(() => setReduced(mq.matches));
     const handler = (e: MediaQueryListEvent) => setReduced(e.matches);
-    mq.addEventListener("change", handler);
-    return () => mq.removeEventListener("change", handler);
+    if ("addEventListener" in mq) {
+      mq.addEventListener("change", handler);
+      return () => mq.removeEventListener("change", handler);
+    }
+    const legacyMq = mq as LegacyMediaQueryList;
+    legacyMq.addListener(handler);
+    return () => legacyMq.removeListener(handler);
   }, []);
 
   // Measure the rendered list and frame heights + the track's flex gap.
@@ -84,11 +94,73 @@ export function MessageWall({
       });
     };
     update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      window.addEventListener("orientationchange", update);
+      return () => {
+        window.removeEventListener("resize", update);
+        window.removeEventListener("orientationchange", update);
+      };
+    }
     const ro = new ResizeObserver(update);
     if (frameRef.current) ro.observe(frameRef.current);
     if (listRef.current) ro.observe(listRef.current);
     return () => ro.disconnect();
   }, [messages.length, height]);
+
+  // Render items with stable keys. For seamless loop we render the list twice.
+  // Recent messages first (newest at top of the visible area); CSS animation
+  // moves the track upward so the oldest items exit the top while new ones
+  // appear at the bottom.
+  const ordered = [...messages].reverse();
+  const list = ordered.map(m => <WallItem key={m.id} message={m} variant={variant} />);
+
+  const { listH, frameH, gap } = layout;
+  // Only insert the spacer when the list is too short to fill the frame.
+  // Sizing the spacer at exactly frameH guarantees the items fully exit
+  // the top before the next copy re-enters from the bottom.
+  const needSpacer = listH > 0 && frameH > 0 && listH < frameH;
+  const spacerH = needSpacer ? frameH : 0;
+  // The track scrolls exactly one content period per cycle so the loop
+  // is seamless. Period accounts for the flex gap between children.
+  //   [L, L]                → listH + gap
+  //   [S, L, S, L]          → spacerH + listH + 2 * gap
+  const period = needSpacer ? listH + spacerH + gap : listH + gap;
+
+  useEffect(() => {
+    const track = trackRef.current;
+    if (!track || messages.length === 0 || reduced || frameH <= 0 || period <= 0) {
+      if (track) track.style.transform = "translateY(0)";
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      return;
+    }
+
+    const pxPerSec = frameH / Math.max(speedSeconds, 1);
+    let offset = 0;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      offset = (offset + pxPerSec * dt) % period;
+      track.style.transform = `translateY(${-offset}px)`;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    track.style.willChange = "transform";
+    track.style.transform = "translateY(0)";
+    rafRef.current = requestAnimationFrame(tick);
+    return () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      track.style.transform = "translateY(0)";
+    };
+  }, [frameH, messages.length, period, reduced, speedSeconds]);
 
   if (messages.length === 0) {
     return (
@@ -104,13 +176,6 @@ export function MessageWall({
       </div>
     );
   }
-
-  // Render items with stable keys. For seamless loop we render the list twice.
-  // Recent messages first (newest at top of the visible area); CSS animation
-  // moves the track upward so the oldest items exit the top while new ones
-  // appear at the bottom.
-  const ordered = [...messages].reverse();
-  const list = ordered.map(m => <WallItem key={m.id} message={m} variant={variant} />);
 
   // Reduced motion = static, scrollable list
   if (reduced) {
@@ -130,22 +195,6 @@ export function MessageWall({
     );
   }
 
-  const { listH, frameH, gap } = layout;
-  // Only insert the spacer when the list is too short to fill the frame.
-  // Sizing the spacer at exactly frameH guarantees the items fully exit
-  // the top before the next copy re-enters from the bottom.
-  const needSpacer = listH > 0 && frameH > 0 && listH < frameH;
-  const spacerH = needSpacer ? frameH : 0;
-  // The track scrolls exactly one content period per cycle so the loop
-  // is seamless. Period accounts for the flex gap between children.
-  //   [L, L]                → listH + gap
-  //   [S, L, S, L]          → spacerH + listH + 2 * gap
-  const period = needSpacer ? spacerH + listH + 2 * gap : listH + gap;
-  // Keep each message's pixels/sec constant. `speedSeconds` is the
-  // time for one message to traverse one frame height, so duration is
-  // scaled by (period / frameH).
-  const duration = frameH > 0 ? (period / frameH) * speedSeconds : speedSeconds;
-
   return (
     <div
       ref={frameRef}
@@ -159,22 +208,15 @@ export function MessageWall({
       }}
       role="log"
       aria-label="Live audience messages"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
     >
       <div
         ref={trackRef}
-        className="flex animate-wall-scroll flex-col gap-1.5 p-3 will-change-transform"
-        style={{
-          ["--wall-distance" as string]: `${period}px`,
-          animationDuration: `${duration}s`,
-          animationPlayState: paused ? "paused" : "running",
-        } as React.CSSProperties}
+        className="flex flex-col gap-1.5 p-3 will-change-transform"
       >
-        {spacerH > 0 && <div className="flex-none" style={{ height: spacerH }} aria-hidden />}
         <div ref={listRef} className="flex flex-col [gap:inherit]">{list}</div>
         {spacerH > 0 && <div className="flex-none" style={{ height: spacerH }} aria-hidden />}
         <div className="flex flex-col [gap:inherit]">{list}</div>
+        {spacerH > 0 && <div className="flex-none" style={{ height: spacerH }} aria-hidden />}
       </div>
 
       {/* Top + bottom fade gradients so items dissolve into the frame.
