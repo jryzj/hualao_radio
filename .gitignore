@@ -36,6 +36,15 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env
+.env.local
+.env.development
+.env.development.local
+.env.production
+.env.production.local
+.env.test
+.env.test.local
+*.env.bak
+*.env.backup
 
 # vercel
 .vercel
@@ -57,9 +66,21 @@ next-env.d.ts
 # uploaded reference audio (admin workflow uploads)
 /public/uploads/
 
-# TTS voice-clone reference samples (proprietary voice data, kept locally)
-/workflows/*.flac
+# TTS voice-clone reference samples (proprietary voice data, kept locally).
+# ComfyUI TTS outputs include .wav, .ogg, .m4a, .aac in addition to the
+# flac/mp3 we explicitly upload as ref-audio. Ignore the common set.
+*.flac
+*.wav
+*.ogg
+*.m4a
+*.aac
 /workflows/*.mp3
+/public/uploads/
+
+# TTS-generated audio output (ComfyUI results)
+/comfyui-output/
+/.tts-cache/
+*.tts-output.*
 
 # Internal-only project documents (not for the public repo)
 /PRD.md
@@ -84,4 +105,87 @@ next-env.d.ts
 
 # Script-generated screenshots and visual test artifacts
 /scripts/*.png
+
+# Runtime log files written at the project root when `npm start`/`npm run
+# dev` is launched in a way that captures stdout/stderr. The project's
+# launcher used to write `.server-out.txt` + `.server-err.txt`; if a new
+# variant appears, this glob catches it.
+.server-*.txt
+*.pid
+*.seed
+*.pid.lock
+
+# Editor / shell backup files (vim, emacs, JetBrains, VS Code crash
+# dumps, etc.). These often contain excerpts of source the user is
+# editing — sometimes including secrets from .env that were open in the
+# editor — so ignore them by default.
+*.bak
+*.orig
+*.rej
+*.swp
+*.swo
+*~
+.\#*
+\#*\#
+*.tmp
+*.orig
+*.dump
+
+# OS / shell artifacts
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Editor / IDE workspace settings (user-specific)
+/.vscode/
+/.idea/
+*.swp
+*.swo
+*~
+.cursor/
+.aider*
+.cody/
+.clinerules/
+
+# Build / cache artifacts that have appeared or might appear
+/.next/
+/.next-cache/
+/out/
+/build/
+/.swc/
+/.turbo/
+/dist/
+/.cache/
+
+# Coverage / test reports (in case Jest/Vitest are added later)
+/coverage/
+/.nyc_output/
+/junit.xml
+/test-results/
+/playwright-report/
+/playwright/.cache/
+
+# Logs that may land anywhere (not just project root)
+/logs/
+*.log
+
+# Local package mirrors / pnpm caches
+.pnpm-store/
+.pnpm-debug.log*
+
+# Yarn / npm scratch
+.yarn/cache
+.yarn/unplugged
+.yarn/build-state.yml
+.yarn/install-state.gz
+
+# Misc
+*.local
+.history/
+.idea_modules/
+*.iml
+*.ipr
+*.iws
 
