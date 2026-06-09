@@ -554,6 +554,28 @@ body.drawer-open {
   touch-action: none;
 }
 
+/* ====== iOS 14 / Safari 14 fallbacks ====== */
+@supports not (aspect-ratio: 1) {
+  /* iOS 14 (max ~14.8) and Safari 14 don't understand `aspect-ratio`.
+   * The AudioVisualizer's wrapper (`aspect-square w-full`) collapses to
+   * content-height without it, the canvas/SVG inside stretch to that
+   * non-square height, and the FFT bars look like a melted puddle.
+   *
+   * The classic fallback: zero out `height` and use `padding-bottom:
+   * 100%` of the (parent- or utility-set) `width` to make the box
+   * square. Children must be `position: absolute; inset: 0` — the
+   * visualizer already does this for all its children, and the
+   * radio-player consumer also uses absolute children. */
+  .aspect-square {
+    height: 0;
+    padding-bottom: 100%;
+  }
+  .aspect-square > * {
+    position: absolute;
+    inset: 0;
+  }
+}
+
 /* ====== Reduced motion ====== */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
