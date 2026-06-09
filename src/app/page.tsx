@@ -961,11 +961,8 @@ export default function Home() {
     // Per-fab-variant state (cyan wall vs magenta input, idle vs active)
     // is composed via cn(). The .ios-install-hint block targeted a class
     // that no longer exists (IosInstallHint was migrated in Phase 1.1).
-<<<<<<< HEAD
-    <div className="relative z-[2] flex min-h-viewport flex-col overflow-hidden">
-=======
+
     <div className="relative z-[2] flex min-h-[100vh] flex-col overflow-hidden">
->>>>>>> side1
       <main className="mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 md:max-w-full md:px-8 md:py-7 lg:max-w-[1600px] lg:px-10 lg:py-9 3xl:px-14 3xl:py-12 landscape-short:py-0.5 landscape-shorter:py-0">
         <div className="flex w-full min-h-0 items-center justify-center">
           <RadioPlayer

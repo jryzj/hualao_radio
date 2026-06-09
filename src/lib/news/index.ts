@@ -84,21 +84,7 @@ class NewsService {
     return await runRssRefresh();
   }
 
-<<<<<<< HEAD
-  // Force an immediate refresh of a single source by id.
-  async refreshSource(id: string): Promise<{ ok: boolean; items: number; error?: string }> {
-    const source = await prisma.rssSource.findUnique({ where: { id } });
-    if (!source) return { ok: false, items: 0, error: "NOT_FOUND" };
-    const results = await fetchAllSources([{ id: source.id, url: source.url }], 1);
-    const r = results[0];
-    if (!r.result.ok) {
-      await markSourceFailure(id);
-      return { ok: false, items: 0, error: r.result.error };
-    }
-    const items = await writeItems(id, r.result.items);
-    await markSourceSuccess(id, r.result.feedTitle);
-    return { ok: true, items };
-=======
+
   // Force an immediate RSS refresh of a single source by id. Returns the
   // per-source outcome so the admin UI can surface a precise error
   // (e.g. "NOT_FOUND" if the id was deleted between page load and click,
@@ -109,7 +95,6 @@ class NewsService {
     { ok: true; items: FetchedItem[] } | { ok: false; error: string }
   > {
     return await runSingleSourceRefresh(id);
->>>>>>> side1
   }
 }
 
