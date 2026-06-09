@@ -188,8 +188,8 @@
 }
 
 @keyframes ripple {
-  0%   { transform: scale(0.9); opacity: 0.6; }
-  100% { transform: scale(1.8); opacity: 0; }
+  0%   { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+  100% { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
 }
 
 @keyframes glitch-shift {
@@ -302,8 +302,13 @@ body {
   background: var(--bg-deep);
   color: var(--text-primary);
   font-family: var(--font-body);
+  /* 100vh covers every iOS/macOS Safari from 14 onward. We deliberately
+   * don't also set 100dvh as a fallback: dvh parses as invalid on
+   * iPadOS 16.0-16.3 (causes the body to collapse to 0 height and the
+   * user sees a fully black screen). vh is ~56px more than dvh when
+   * the URL bar is showing on iOS 15.4+, which is acceptable for a
+   * background-color body. */
   min-height: 100vh;
-  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.5;
@@ -534,8 +539,17 @@ input, select, textarea {
   outline-offset: 2px;
 }
 
-/* Body lock when drawer is open */
+/* Body lock when drawer is open.
+ *
+ * iOS Safari quirk: `overflow: hidden` on <body> alone does NOT prevent
+ * background scroll. The well-tested workaround is to switch body to
+ * `position: fixed` with `top: -<saved scrollY>` (set in JS by
+ * MessageInputDrawer), and restore the scroll position on cleanup.
+ * `width: 100%` prevents a layout jump from the missing scrollbar. */
 body.drawer-open {
+  position: fixed;
+  inset: 0;
+  width: 100%;
   overflow: hidden;
   touch-action: none;
 }

@@ -43,6 +43,7 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
     transition: open
       ? "transform 0.35s var(--ease-out), opacity 0.25s var(--ease-out), visibility 0s linear 0s"
       : "transform 0.35s var(--ease-out), opacity 0.25s var(--ease-out), visibility 0s linear 0.35s",
+    transform: open ? "translate(0, -50%)" : "translate(120%, -50%)",
   };
 
   return (
@@ -57,12 +58,12 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
         // Base positioning + transparency (text-only panel)
         "fixed top-1/2 right-3 left-auto bottom-auto z-[60] flex w-[260px] flex-col overflow-hidden border-0 bg-transparent p-0 opacity-0 shadow-none outline-none backdrop-filter-none",
         // Closed state: slide off-right + hide
-        !open && "pointer-events-none invisible translate-x-[120%] -translate-y-1/2",
+        !open && "pointer-events-none invisible",
         // Open state: visible + slide in
-        open && "pointer-events-auto visible translate-x-0 -translate-y-1/2 opacity-100",
+        open && "pointer-events-auto visible opacity-100",
         // Responsive width/inset — sm=480, md=768, lg=1024, 3xl=1366
         "sm:right-4 sm:w-[280px]",
-        "md:right-5 md:w-[300px] md:max-h-[calc(100dvh-32px)]",
+        "md:right-5 md:w-[300px] md:max-h-[calc(100vh-32px)]",
         "lg:right-7 lg:w-[320px]",
         "3xl:right-9 3xl:w-[360px]",
         // Landscape short — re-anchor to the TOP-RIGHT and cap height.
@@ -71,8 +72,8 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
         // bottom-right FAB stack on phone landscape (360–420h). Moving
         // it to top + removing the vertical centering clears the FAB
         // area while keeping the slide-in-from-right animation.
-        "landscape-short:top-3 landscape-short:bottom-auto landscape-short:max-h-[200px] landscape-short:translate-y-0",
-        "landscape-shorter:top-2.5 landscape-shorter:bottom-auto landscape-shorter:max-h-[170px] landscape-shorter:translate-y-0",
+        "landscape-short:top-3 landscape-short:bottom-auto landscape-short:max-h-[200px]",
+        "landscape-shorter:top-2.5 landscape-shorter:bottom-auto landscape-shorter:max-h-[170px]",
       )}
     >
       <div className="flex flex-none flex-col border-0 bg-transparent p-0 shadow-none outline-none [&>*]:w-full">

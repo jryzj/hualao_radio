@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build",
+    "build": "prisma generate && next build && node scripts/fix-safari14-build.mjs && node scripts/verify-safari14-build.mjs",
     "start": "prisma migrate deploy && next start",
     "lint": "eslint",
     "postinstall": "prisma generate",

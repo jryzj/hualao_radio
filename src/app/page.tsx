@@ -33,6 +33,63 @@ const DEFAULT_BUFFER_CFG: AudioBufferCfg = {
 };
 
 const ENTERED_KEY = "radioai.entered";
+const SILENT_WAV_DATA_URI =
+  "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTAAAAAA";
+
+function detectAudioMime(bytes: Uint8Array): string {
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x41 && bytes[10] === 0x56 && bytes[11] === 0x45
+  ) {
+    return "audio/wav";
+  }
+  if (
+    bytes.length >= 3 &&
+    bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33
+  ) {
+    return "audio/mpeg";
+  }
+  if (
+    bytes.length >= 2 &&
+    bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0
+  ) {
+    return "audio/mpeg";
+  }
+  if (
+    bytes.length >= 4 &&
+    bytes[0] === 0x4f && bytes[1] === 0x67 && bytes[2] === 0x67 && bytes[3] === 0x53
+  ) {
+    return "audio/ogg";
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70
+  ) {
+    return "audio/mp4";
+  }
+  return "audio/mpeg";
+}
+
+function readBlobAsArrayBuffer(blob: Blob): Promise<ArrayBuffer> {
+  if ("arrayBuffer" in blob) return blob.arrayBuffer();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (reader.result instanceof ArrayBuffer) resolve(reader.result);
+      else reject(new Error("Blob did not read as ArrayBuffer"));
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("Blob read failed"));
+    reader.readAsArrayBuffer(blob);
+  });
+}
+
+function decodeAudioDataCompat(ctx: AudioContext, buffer: ArrayBuffer): Promise<AudioBuffer> {
+  const copy = buffer.slice(0);
+  return new Promise((resolve, reject) => {
+    ctx.decodeAudioData(copy, resolve, reject);
+  });
+}
 
 export default function Home() {
   // === Theme / config ===
@@ -47,19 +104,23 @@ export default function Home() {
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const entered = window.localStorage.getItem(ENTERED_KEY) === "true";
-    if (entered) {
-      setHasEntered(true);
-      setShowEnter(false);
-    } else {
-      setShowEnter(true);
-    }
+    const id = window.requestAnimationFrame(() => {
+      const entered = window.localStorage.getItem(ENTERED_KEY) === "true";
+      if (entered) {
+        setHasEntered(true);
+        setShowEnter(false);
+      } else {
+        setShowEnter(true);
+      }
+    });
+    return () => window.cancelAnimationFrame(id);
   }, []);
 
   // === Audio element + AudioContext + AnalyserNode ===
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const audioGainRef = useRef<GainNode | null>(null);
   const [analyser, setAnalyser] = useState<AnalyserNode | null>(null);
 
   // === Playback state ===
@@ -71,19 +132,23 @@ export default function Home() {
 
   const [queueLength, setQueueLength] = useState(0);
   const [bufferStatus, setBufferStatus] = useState<{ ready: boolean; sentences: number; seconds: number; needed: number }>({ ready: false, sentences: 0, seconds: 0, needed: 0 });
-  // Flips true once the server has finished draining its replay buffer
-  // to us and we are receiving live chunks. The audio queue/playNext
-  // path doesn't branch on this — the replay and live chunks go through
-  // the same code — but keeping the flag around means a future UI
-  // ("TUNING IN…" → "LIVE") is a one-line change.
-  const [replayComplete, setReplayComplete] = useState(false);
-
   const audioQueueRef = useRef<string[]>([]);
+  const decodedQueueRef = useRef<AudioBuffer[]>([]);
   const durationQueueRef = useRef<number[]>([]);
   const isPlayingRef = useRef(false);
+  const webAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
+  const playNextRef = useRef<() => void>(() => {});
+  const desiredPlaybackRef = useRef(false);
   const hasStartedRef = useRef(false);
   const currentUrlRef = useRef<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const audioPrimedRef = useRef(false);
+  // Audio WebSocket reconnect (Fix #6) — iOS Safari suspends WS in the
+  // background and may not surface the close. We mirror the message-WS
+  // retry loop (see below) so a transient drop (ws-server restart, idle
+  // proxy timeout, iOS background→foreground) heals on its own.
+  const audioSocketRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const audioSocketBackoffRef = useRef(1000);
   const shouldAutoStartRef = useRef(false); // try to autostart once entered
 
   // === Messages ===
@@ -119,6 +184,78 @@ export default function Home() {
     setWallOpen(false);
   }, []);
 
+  const ensureAudioReady = useCallback(async () => {
+    if (typeof window === "undefined" || !audioRef.current) return false;
+
+    if (audioCtxRef.current) {
+      try {
+        if (audioCtxRef.current.state === "suspended") {
+          await audioCtxRef.current.resume();
+        }
+        if (audioGainRef.current) audioGainRef.current.gain.value = volumeRef.current;
+        if (analyserRef.current) setAnalyser(analyserRef.current);
+        setHasEntered(true);
+        setShowEnter(false);
+        return true;
+      } catch (err) {
+        console.error("[audio] resume failed:", err);
+        return false;
+      }
+    }
+
+    try {
+      const Ctx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
+      if (!Ctx) throw new Error("Web Audio API not supported");
+      const ctx = new Ctx();
+      await ctx.resume();
+      audioCtxRef.current = ctx;
+
+      const analyserNode = ctx.createAnalyser();
+      analyserNode.fftSize = 256;
+      analyserNode.smoothingTimeConstant = 0.7;
+      analyserNode.connect(ctx.destination);
+      analyserRef.current = analyserNode;
+      setAnalyser(analyserNode);
+
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = volumeRef.current;
+      gainNode.connect(analyserNode);
+      audioGainRef.current = gainNode;
+
+      try {
+        const source = ctx.createMediaElementSource(audioRef.current);
+        source.connect(gainNode);
+      } catch (err) {
+        console.error("[audio] analyser init failed:", err);
+      }
+      window.localStorage.setItem(ENTERED_KEY, "true");
+      setHasEntered(true);
+      setShowEnter(false);
+      if (!audioPrimedRef.current) {
+        const prevSrc = audioRef.current.currentSrc || audioRef.current.src;
+        const prevMuted = audioRef.current.muted;
+        audioRef.current.muted = true;
+        audioRef.current.src = SILENT_WAV_DATA_URI;
+        try {
+          await audioRef.current.play();
+          audioRef.current.pause();
+        } catch (err) {
+          console.error("[audio] prime failed:", err);
+        } finally {
+          audioRef.current.removeAttribute("src");
+          audioRef.current.load();
+          audioRef.current.muted = prevMuted;
+          if (prevSrc) audioRef.current.src = prevSrc;
+        }
+        audioPrimedRef.current = true;
+      }
+      return true;
+    } catch (err) {
+      console.error("[audio] init failed:", err);
+      return false;
+    }
+  }, []);
+
   // === Init: fetch config + initial messages ===
   useEffect(() => {
     fetch("/api/config").then(r => r.json()).then(t => {
@@ -146,12 +283,10 @@ export default function Home() {
         setScrollSpeedSeconds(cfg.scrollSpeedSeconds);
       }
     }).catch(() => {});
-    if (messageFrontendVisible) {
-      fetch("/api/messages")
-        .then(r => r.json())
-        .then((list: WallMessage[]) => setWallMessages(list))
-        .catch(() => {});
-    }
+    fetch("/api/messages")
+      .then(r => r.json())
+      .then((list: WallMessage[]) => setWallMessages(list))
+      .catch(() => {});
   }, []);
 
   // === Message WebSocket ===
@@ -237,6 +372,29 @@ export default function Home() {
     };
   }, [messageFrontendVisible]);
 
+  // Poll the visible message list so the wall still updates even when
+  // the message WebSocket is idle, blocked by a proxy, or temporarily down.
+  useEffect(() => {
+    if (typeof window === "undefined" || !messageFrontendVisible) return;
+
+    let cancelled = false;
+    const syncMessages = () => {
+      fetch("/api/messages")
+        .then(r => r.json())
+        .then((list: WallMessage[]) => {
+          if (!cancelled) setWallMessages(list);
+        })
+        .catch(() => {});
+    };
+
+    syncMessages();
+    const id = window.setInterval(syncMessages, 10_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [messageFrontendVisible]);
+
   // When the admin changes the cap at runtime, reconcile the in-memory
   // list with the new limit:
   //   - shrink path (cap lowered): trim the oldest entries locally
@@ -245,19 +403,21 @@ export default function Home() {
   //     the current cap on every request, so a single GET returns up to
   //     the new limit and the wall re-renders at the new size.
   useEffect(() => {
-    setWallMessages(prev => {
-      if (prev.length > maxVisibleMessages) {
-        return prev.slice(prev.length - maxVisibleMessages);
-      }
-      if (prev.length < maxVisibleMessages && messageFrontendVisible) {
+    if (typeof window === "undefined") return;
+    const id = window.requestAnimationFrame(() => {
+      setWallMessages(prev => (
+        prev.length > maxVisibleMessages
+          ? prev.slice(prev.length - maxVisibleMessages)
+          : prev
+      ));
+      if (messageFrontendVisible) {
         fetch("/api/messages")
           .then(r => r.json())
           .then((list: WallMessage[]) => setWallMessages(list))
           .catch(() => {});
-        return prev;
       }
-      return prev;
     });
+    return () => window.cancelAnimationFrame(id);
   }, [maxVisibleMessages, messageFrontendVisible]);
 
   // Re-fetch admin message config on visibility/focus + a slow poll so
@@ -407,29 +567,9 @@ export default function Home() {
     };
   }, [isPlaying]);
 
-  // === Playback logic (preserved from original) ===
-  const playNext = useCallback(() => {
-    if (isPlayingRef.current) return;
-    if (audioQueueRef.current.length === 0) {
-      hasStartedRef.current = false;
-      return;
-    }
-    const nextUrl = audioQueueRef.current.shift();
-    if (!nextUrl) return;
-    if (!audioRef.current) return;
-    if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
-    currentUrlRef.current = nextUrl;
-    audioRef.current.src = nextUrl;
-    audioRef.current.volume = volumeRef.current;
-    isPlayingRef.current = true;
-    const p = audioRef.current.play();
-    if (p) p.catch(() => {});
-    setQueueLength(audioQueueRef.current.length);
-  }, []);
-
   const checkBufferReady = useCallback((): { ready: boolean; sentences: number; seconds: number; needed: number } => {
     const cfg = bufferCfgRef.current;
-    const sentences = audioQueueRef.current.length;
+    const sentences = audioQueueRef.current.length + decodedQueueRef.current.length;
     const seconds = durationQueueRef.current.reduce((a, b) => a + b, 0);
     let ready = false;
     let needed = 0;
@@ -458,63 +598,114 @@ export default function Home() {
     return status.ready;
   }, [checkBufferReady]);
 
-  const probeAudioDuration = (_blob: Blob, url: string): Promise<number> => {
+  // === Playback logic ===
+  const playNext = useCallback(() => {
+    if (isPlayingRef.current) return;
+    if (decodedQueueRef.current.length > 0) {
+      const ctx = audioCtxRef.current;
+      const gainNode = audioGainRef.current;
+      const nextBuffer = decodedQueueRef.current.shift();
+      if (!ctx || !gainNode || !nextBuffer) return;
+      const source = ctx.createBufferSource();
+      source.buffer = nextBuffer;
+      source.connect(gainNode);
+      webAudioSourceRef.current = source;
+      isPlayingRef.current = true;
+      source.onended = () => {
+        if (webAudioSourceRef.current !== source) return;
+        webAudioSourceRef.current = null;
+        try { source.disconnect(); } catch {}
+        isPlayingRef.current = false;
+        if (durationQueueRef.current.length > 0) durationQueueRef.current.shift();
+        updateBufferStatus();
+        playNextRef.current();
+        fetch("/api/live/playback-complete", { method: "POST" }).catch(() => {});
+      };
+      source.start(0);
+      setQueueLength(audioQueueRef.current.length + decodedQueueRef.current.length);
+      return;
+    }
+
+    if (audioQueueRef.current.length === 0) {
+      hasStartedRef.current = false;
+      return;
+    }
+    const nextUrl = audioQueueRef.current.shift();
+    if (!nextUrl) return;
+    if (!audioRef.current) return;
+    if (currentUrlRef.current) URL.revokeObjectURL(currentUrlRef.current);
+    currentUrlRef.current = nextUrl;
+    const audio = audioRef.current;
+    audio.src = nextUrl;
+    audio.volume = volumeRef.current;
+    audio.load();
+    isPlayingRef.current = true;
+    const retryPlayOnce = () => {
+      const a = audioRef.current;
+      if (!a || currentUrlRef.current !== nextUrl) return;
+      a.play().catch(() => {
+        isPlayingRef.current = false;
+      });
+    };
+    const p = audio.play();
+    if (p) {
+      p.catch(() => {
+        const a = audioRef.current;
+        if (!a || currentUrlRef.current !== nextUrl) {
+          isPlayingRef.current = false;
+          return;
+        }
+        a.addEventListener("canplay", retryPlayOnce, { once: true });
+        a.addEventListener("loadedmetadata", retryPlayOnce, { once: true });
+      });
+    }
+    setQueueLength(audioQueueRef.current.length + decodedQueueRef.current.length);
+  }, [updateBufferStatus]);
+
+  useEffect(() => {
+    playNextRef.current = playNext;
+  }, [playNext]);
+
+  const probeAudioDuration = useCallback((_blob: Blob, url: string): Promise<number> => {
     return new Promise((resolve) => {
       const probe = new Audio();
+      const timeout = window.setTimeout(() => resolve(0), 1200);
       probe.preload = "metadata";
       probe.src = url;
       probe.onloadedmetadata = () => {
+        window.clearTimeout(timeout);
         const d = probe.duration;
         resolve(isFinite(d) ? d : 0);
       };
-      probe.onerror = () => resolve(0);
+      probe.onerror = () => {
+        window.clearTimeout(timeout);
+        resolve(0);
+      };
     });
-  };
+  }, []);
 
-  // === Connect audio WS ===
-  const startPlayback = useCallback(async () => {
-    if (!audioRef.current) return;
-    const t = await fetch("/api/config").then(r => r.json()).catch(() => null);
-    if (!t) return;
-    // Same base as the message socket — see the comment there about
-    // NEXT_PUBLIC_WS_URL.
-    const wsUrl = `${wsBaseUrl()}/audio?themeId=${t.id}`;
-    const socket = new WebSocket(wsUrl);
-    socket.binaryType = "arraybuffer";
-    socketRef.current = socket;
-    socket.onopen = () => setConnected(true);
-    socket.onclose = () => setConnected(false);
-    socket.onerror = () => {};
-    socket.onmessage = (e) => {
-      if (typeof e.data === "string") {
-        if (e.data === "flush" || e.data.startsWith('{"type":"flush"}')) {
-          if (audioRef.current) {
-            audioRef.current.pause();
-            audioRef.current.currentTime = 0;
-          }
-          audioQueueRef.current = [];
-          durationQueueRef.current = [];
-          isPlayingRef.current = false;
-          hasStartedRef.current = false;
-          setQueueLength(0);
+  const enqueueAudioBuffer = useCallback((buffer: ArrayBuffer) => {
+    if (!desiredPlaybackRef.current || buffer.byteLength === 0 || !audioRef.current) return;
+    const ctx = audioCtxRef.current;
+
+    const afterQueued = () => {
+      setQueueLength(audioQueueRef.current.length + decodedQueueRef.current.length);
+      if (!hasStartedRef.current) {
+        const ready = checkBufferReady().ready;
+        if (ready) {
+          hasStartedRef.current = true;
+          playNext();
+        } else {
           updateBufferStatus();
-          return;
         }
-        // Replay-to-late-joiners marker from ws-server: every chunk the
-        // server buffered (last N from the live engine) has been
-        // pushed to us; from here on we are receiving live chunks. The
-        // queue logic is identical for replay vs live — both are binary
-        // audio frames appended to audioQueueRef.current — so this
-        // branch only flips a UI flag. Reset on stopPlayback below.
-        if (e.data.startsWith('{"type":"replay_end"}')) {
-          setReplayComplete(true);
-          return;
-        }
-        return;
+      } else if (!isPlayingRef.current && (audioQueueRef.current.length > 0 || decodedQueueRef.current.length > 0)) {
+        playNext();
       }
-      const byteLen = (e.data as ArrayBuffer).byteLength;
-      if (byteLen === 0 || !audioRef.current) return;
-      const blob = new Blob([e.data]);
+    };
+
+    const enqueueHtmlAudio = () => {
+      const bytes = new Uint8Array(buffer);
+      const blob = new Blob([buffer], { type: detectAudioMime(bytes) });
       const blobUrl = URL.createObjectURL(blob);
       audioQueueRef.current.push(blobUrl);
       probeAudioDuration(blob, blobUrl).then(d => {
@@ -529,23 +720,128 @@ export default function Home() {
           playNext();
         }
       });
-      setQueueLength(audioQueueRef.current.length);
-      if (!hasStartedRef.current) {
-        const ready = checkBufferReady().ready;
-        if (ready) {
-          hasStartedRef.current = true;
-          playNext();
-        } else {
+      afterQueued();
+    };
+
+    if (!ctx) {
+      enqueueHtmlAudio();
+      return;
+    }
+
+    decodeAudioDataCompat(ctx, buffer)
+      .then(decoded => {
+        decodedQueueRef.current.push(decoded);
+        durationQueueRef.current.push(decoded.duration);
+        updateBufferStatus();
+        afterQueued();
+      })
+      .catch(enqueueHtmlAudio);
+  }, [checkBufferReady, playNext, probeAudioDuration, updateBufferStatus]);
+
+  // === Connect audio WS ===
+  //
+  // The audio socket mirrors the message-socket retry pattern: open
+  // fails or server closes → wait with exponential backoff (1s, 2s, 4s,
+  // …, cap 15s) and reconnect. On iOS Safari the page can come back from
+  // the background with a zombie socket; the next time the browser
+  // surfaces `onclose` (or our `visibilitychange` handler sees
+  // `connected === false` while we believe we're playing), this loop
+  // heals the link without a page reload.
+  //
+  // Defined BEFORE startPlayback so the latter's exhaustive-deps lint
+  // rule is satisfied without resorting to ignore comments.
+  const connectAudioSocket = useCallback((themeId: string) => {
+    if (typeof window === "undefined") return;
+    // Same base as the message socket — see the comment there about
+    // NEXT_PUBLIC_WS_URL.
+    const wsUrl = `${wsBaseUrl()}/audio?themeId=${themeId}`;
+    const socket = new WebSocket(wsUrl);
+    socket.binaryType = "arraybuffer";
+    socketRef.current = socket;
+    socket.onopen = () => {
+      setConnected(true);
+      // Reset backoff on a successful handshake so the next failure
+      // starts the backoff sequence from 1s again.
+      audioSocketBackoffRef.current = 1000;
+    };
+    socket.onclose = () => {
+      setConnected(false);
+      socketRef.current = null;
+      // Only retry if the user hasn't explicitly stopped playback.
+      if (!desiredPlaybackRef.current) return;
+      const delay = audioSocketBackoffRef.current;
+      audioSocketBackoffRef.current = Math.min(delay * 2, 15_000);
+      audioSocketRetryRef.current = setTimeout(() => {
+        audioSocketRetryRef.current = null;
+        // Self-reference is intentional — this is the reconnect arm of
+        // the function itself. The React Hooks compiler linter can't
+        // follow the recursive closure; at runtime `connectAudioSocket`
+        // is bound to the latest closure produced by useCallback (the
+        // linter is concerned about stale closures, which is not an
+        // issue here because themeId is captured by value and
+        // connectAudioSocket is recreated only on stable dependency
+        // changes).
+        // eslint-disable-next-line react-hooks/immutability
+        connectAudioSocket(themeId);
+      }, delay);
+    };
+    socket.onerror = () => {};
+    socket.onmessage = (e) => {
+      if (typeof e.data === "string") {
+        if (e.data === "flush" || e.data.startsWith('{"type":"flush"}')) {
+          if (audioRef.current) {
+            audioRef.current.pause();
+            audioRef.current.currentTime = 0;
+          }
+          if (webAudioSourceRef.current) {
+            try { webAudioSourceRef.current.stop(); } catch {}
+            try { webAudioSourceRef.current.disconnect(); } catch {}
+            webAudioSourceRef.current = null;
+          }
+          for (const url of audioQueueRef.current) URL.revokeObjectURL(url);
+          audioQueueRef.current = [];
+          decodedQueueRef.current = [];
+          durationQueueRef.current = [];
+          isPlayingRef.current = false;
+          hasStartedRef.current = false;
+          setQueueLength(0);
           updateBufferStatus();
+          return;
         }
-      } else if (!isPlayingRef.current && audioQueueRef.current.length > 0) {
-        playNext();
+        if (e.data.startsWith('{"type":"replay_end"}')) {
+          return;
+        }
+        return;
+      }
+      if (e.data instanceof ArrayBuffer) {
+        enqueueAudioBuffer(e.data);
+      } else if (e.data instanceof Blob) {
+        readBlobAsArrayBuffer(e.data).then(enqueueAudioBuffer).catch(() => {});
       }
     };
+  }, [enqueueAudioBuffer, updateBufferStatus]);
+
+  const startPlayback = useCallback(async () => {
+    if (!audioRef.current) return;
+    const ready = await ensureAudioReady();
+    if (!ready) return;
+    const t = await fetch("/api/config").then(r => r.json()).catch(() => null);
+    if (!t) return;
+    desiredPlaybackRef.current = true;
+    audioSocketBackoffRef.current = 1000;
+    connectAudioSocket(t.id);
     setIsPlaying(true);
-  }, [checkBufferReady, playNext, updateBufferStatus]);
+  }, [connectAudioSocket, ensureAudioReady]);
 
   const stopPlayback = useCallback(() => {
+    // Clear any pending audio-WS retry (Fix #6) — otherwise a reconnect
+    // scheduled by the previous socket's onclose would fire after the
+    // user already tapped STOP, opening a fresh socket the user didn't ask for.
+    if (audioSocketRetryRef.current) {
+      clearTimeout(audioSocketRetryRef.current);
+      audioSocketRetryRef.current = null;
+    }
+    desiredPlaybackRef.current = false;
     if (socketRef.current) {
       socketRef.current.close();
       socketRef.current = null;
@@ -554,13 +850,23 @@ export default function Home() {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
     }
+    if (webAudioSourceRef.current) {
+      try { webAudioSourceRef.current.stop(); } catch {}
+      try { webAudioSourceRef.current.disconnect(); } catch {}
+      webAudioSourceRef.current = null;
+    }
+    if (currentUrlRef.current) {
+      URL.revokeObjectURL(currentUrlRef.current);
+      currentUrlRef.current = null;
+    }
+    for (const url of audioQueueRef.current) URL.revokeObjectURL(url);
     audioQueueRef.current = [];
+    decodedQueueRef.current = [];
     durationQueueRef.current = [];
     hasStartedRef.current = false;
     isPlayingRef.current = false;
     setQueueLength(0);
     updateBufferStatus();
-    setReplayComplete(false);
     setIsPlaying(false);
   }, [updateBufferStatus]);
 
@@ -573,42 +879,27 @@ export default function Home() {
   const handleEnter = useCallback(async () => {
     if (!audioRef.current) {
       // audio element not mounted yet — retry next frame
-      requestAnimationFrame(() => handleEnter());
+      requestAnimationFrame(() => {
+        void ensureAudioReady().then((ready) => {
+          if (ready) {
+            shouldAutoStartRef.current = true;
+          } else {
+            setShowEnter(false);
+            setHasEntered(true);
+          }
+        });
+      });
       return;
     }
-    try {
-      // Create AudioContext (must be inside user gesture)
-      const Ctx = (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext);
-      if (!Ctx) throw new Error("Web Audio API not supported");
-      const ctx = new Ctx();
-      await ctx.resume();
-
-      // Connect audio element to analyser
-      // Guard: createMediaElementSource can only be called once per element.
-      // If the user reloads the page we get a fresh element, so this is safe.
-      const source = ctx.createMediaElementSource(audioRef.current);
-      const analyserNode = ctx.createAnalyser();
-      analyserNode.fftSize = 256;
-      analyserNode.smoothingTimeConstant = 0.7;
-      source.connect(analyserNode);
-      analyserNode.connect(ctx.destination);
-
-      audioCtxRef.current = ctx;
-      analyserRef.current = analyserNode;
-      setAnalyser(analyserNode);
-
-      // Mark entered + autostart
-      window.localStorage.setItem(ENTERED_KEY, "true");
-      setHasEntered(true);
-      setShowEnter(false);
+    const ready = await ensureAudioReady();
+    if (ready) {
       shouldAutoStartRef.current = true;
-    } catch (err) {
-      console.error("[enter] failed:", err);
+    } else {
       // Still close the overlay so user isn't stuck
       setShowEnter(false);
       setHasEntered(true);
     }
-  }, []);
+  }, [ensureAudioReady]);
 
   // === Autostart after entering (only once) ===
   useEffect(() => {
@@ -635,6 +926,7 @@ export default function Home() {
   const onVolumeChange = useCallback((v: number) => {
     setVolume(v);
     if (audioRef.current) audioRef.current.volume = v;
+    if (audioGainRef.current) audioGainRef.current.gain.value = v;
   }, []);
 
   // === Audio ended → next ===
@@ -655,7 +947,7 @@ export default function Home() {
 
   // === Prebuffer mode label ===
   const prebufferModeLabel = (() => {
-    switch (bufferCfgRef.current.prebufferMode) {
+    switch (bufferCfg.prebufferMode) {
       case "group": return "组";
       case "paragraph": return "段";
       default: return "句";
@@ -669,7 +961,7 @@ export default function Home() {
     // Per-fab-variant state (cyan wall vs magenta input, idle vs active)
     // is composed via cn(). The .ios-install-hint block targeted a class
     // that no longer exists (IosInstallHint was migrated in Phase 1.1).
-    <div className="relative z-[2] flex min-h-[100dvh] flex-col overflow-hidden">
+    <div className="relative z-[2] flex min-h-[100vh] flex-col overflow-hidden">
       <main className="mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 md:max-w-full md:px-8 md:py-7 lg:max-w-[1600px] lg:px-10 lg:py-9 3xl:px-14 3xl:py-12 landscape-short:py-0.5 landscape-shorter:py-0">
         <div className="flex w-full min-h-0 items-center justify-center">
           <RadioPlayer
@@ -729,11 +1021,23 @@ export default function Home() {
         <span>{new Date().getFullYear()}</span>
       </footer>
 
-      {/* Hidden audio element (used by both Web Audio analyser and HTMLAudio) */}
+      {/* Hidden audio element (used by both Web Audio analyser and HTMLAudio)
+       *
+       * iOS Safari quirk fixes:
+       * - `playsInline` — without it, iOS may force the native fullscreen
+       *   player on `play()` if any ancestor ever loses `display: none`.
+       *   We're safe today (`className="hidden"`), but `playsInline` is
+       *   the durable fix.
+       * - `crossOrigin="anonymous"` — required when feeding the element
+       *   into `createMediaElementSource` so the resulting
+       *   `MediaElementAudioSourceNode` is treated as a CORS-clean
+       *   source. On iOS 14, missing this can leave the audio silent. */}
       <audio
         ref={audioRef}
         preload="auto"
-        className="hidden"
+        playsInline
+        crossOrigin="anonymous"
+        className="sr-only"
         onEnded={onAudioEnded}
         onError={onAudioError}
       />

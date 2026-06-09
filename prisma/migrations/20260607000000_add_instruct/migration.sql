@@ -1,0 +1,1 @@
+ALTER TABLE Workflow ADD COLUMN instruct TEXT NOT NULL DEFAULT '';

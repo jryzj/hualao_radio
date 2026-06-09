@@ -65,6 +65,14 @@ export function AudioVisualizer({ analyser, isPlaying, barCount = 48 }: Props) {
       forceRender((n) => n + 1);
     };
     update();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", update);
+      window.addEventListener("orientationchange", update);
+      return () => {
+        window.removeEventListener("resize", update);
+        window.removeEventListener("orientationchange", update);
+      };
+    }
     const ro = new ResizeObserver(update);
     ro.observe(wrapper);
     window.addEventListener("orientationchange", update);
@@ -83,7 +91,7 @@ export function AudioVisualizer({ analyser, isPlaying, barCount = 48 }: Props) {
 
   // === Canvas rAF loop: draw FFT bars when playing ================
   useEffect(() => {
-    if (!isPlaying || !analyser) {
+    if (!isPlaying) {
       if (rafRef.current !== null) {
         cancelAnimationFrame(rafRef.current);
         rafRef.current = null;
@@ -124,24 +132,28 @@ export function AudioVisualizer({ analyser, isPlaying, barCount = 48 }: Props) {
     ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform before scale
     ctx.scale(dpr, dpr);
 
-    const data: Uint8Array<ArrayBuffer> = dataRef.current
-      ?? new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount));
-    dataRef.current = data;
+    const data: Uint8Array<ArrayBuffer> | null = analyser
+      ? (dataRef.current ?? new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount)) as Uint8Array<ArrayBuffer>)
+      : null;
+    if (data) dataRef.current = data;
 
     const orbitR = minDim * FFT_ORBIT_RATIO;
     const barInnerR = orbitR + minDim * FFT_BAR_GAP;
     const barMin = minDim * FFT_BAR_MIN;
     const barMax = minDim * FFT_BAR_MAX;
 
-    const tick = () => {
-      analyser.getByteFrequencyData(data);
+    const tick = (now = performance.now()) => {
+      if (analyser && data) {
+        analyser.getByteFrequencyData(data);
+      }
       ctx.clearRect(0, 0, w, h);
 
       const barWidthScale = minDim / BAR_WIDTH_REF;
       for (let i = 0; i < barCount; i++) {
         // Sample with slight bias toward bass (lower 60% of frequencies)
-        const idx = Math.floor(Math.pow(i / barCount, 1.4) * data.length * 0.6);
-        const v = data[idx] / 255; // 0..1
+        const idx = data ? Math.floor(Math.pow(i / barCount, 1.4) * data.length * 0.6) : 0;
+        const synthetic = 0.18 + 0.16 * Math.sin(now / 280 + i * 0.55) + 0.08 * Math.sin(now / 760 + i * 0.13);
+        const v = data ? data[idx] / 255 : Math.max(0.08, Math.min(0.42, synthetic));
         const barH = barMin + v * (barMax - barMin);
         const angle = (i / barCount) * Math.PI * 2 - Math.PI / 2;
 
@@ -186,10 +198,12 @@ export function AudioVisualizer({ analyser, isPlaying, barCount = 48 }: Props) {
       {isPlaying && (
         <div className="pointer-events-none absolute inset-0">
           <span
-            className="absolute left-1/2 top-1/2 h-3/5 w-3/5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-neon-cyan opacity-0 animate-[ripple_3.2s_ease-out_infinite] will-change-[transform,opacity]"
+            className="absolute left-1/2 top-1/2 h-3/5 w-3/5 rounded-full border-[1.5px] border-neon-cyan opacity-0 animate-[ripple_3.2s_ease-out_infinite] will-change-[transform,opacity]"
+            style={{ transform: "translate(-50%, -50%)" }}
           />
           <span
-            className="absolute left-1/2 top-1/2 h-3/5 w-3/5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[1.5px] border-neon-magenta opacity-0 animate-[ripple_3.2s_ease-out_1.6s_infinite] will-change-[transform,opacity]"
+            className="absolute left-1/2 top-1/2 h-3/5 w-3/5 rounded-full border-[1.5px] border-neon-magenta opacity-0 animate-[ripple_3.2s_ease-out_1.6s_infinite] will-change-[transform,opacity]"
+            style={{ transform: "translate(-50%, -50%)" }}
           />
         </div>
       )}
