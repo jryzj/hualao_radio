@@ -74,6 +74,9 @@ export default function AdminDashboard() {
           <Link href="/admin/config" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
             配置
           </Link>
+          <Link href="/admin/visitors" className="rounded px-3 py-1.5 text-xs text-[#9a958c] no-underline transition-all duration-200 hover:bg-[#1a1a20] hover:text-[#e8a84c]">
+            访问者
+          </Link>
         </nav>
       </header>
 

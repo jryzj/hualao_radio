@@ -8,6 +8,7 @@ import { EnterOverlay } from "@/components/EnterOverlay";
 import { IosInstallHint } from "@/components/IosInstallHint";
 import { wsBaseUrl } from "@/lib/ws-url";
 import { useWakeLock } from "@/lib/wake-lock";
+import { useRecordVisit } from "@/hooks/useRecordVisit";
 import { cn } from "@/lib/cn";
 
 interface Theme {
@@ -92,6 +93,11 @@ function decodeAudioDataCompat(ctx: AudioContext, buffer: ArrayBuffer): Promise<
 }
 
 export default function Home() {
+  // Record this visit to the public homepage. Path is "/" (the
+  // hook falls back to window.location.pathname when omitted, but
+  // passing it explicitly documents intent).
+  useRecordVisit("/");
+
   // === Theme / config ===
   const [theme, setTheme] = useState<Theme | null>(null);
   const [bufferCfg, setBufferCfg] = useState<AudioBufferCfg>(DEFAULT_BUFFER_CFG);

@@ -141,3 +141,36 @@ model MessageConfig {
   scrollSpeedSeconds Int      @default(80)
   updatedAt          DateTime @updatedAt
 }
+
+// 访问者访问记录。客户端在挂载时调用 /api/visitors 上报,服务端补
+// 上 IP + admin 状态后写入。每条记录是一次访问(不做去重,保留原
+// 始访问量信息)。
+//
+//   - deviceType:  mobile / tablet / desktop
+//   - deviceModel: UA 解析出的设备型号(如 "iPhone"、"Pixel 7"),
+//                  桌面端拿不到具体型号时为 "Desktop"
+//   - deviceOs:    操作系统 + 大版本(如 "iOS 17.4"、"Windows 11"、
+//                  "Android 14"、"macOS 14.3")
+//   - deviceName:  浏览器 + 版本(如 "Chrome 125"、"Safari 17.4")
+//   - userName:    设备在用户视角的标识 = OS + 浏览器组合(如
+//                  "Windows 11 / Chrome 125"),原始需求里 "用户
+//                  设备上的用户名" 在浏览器里拿不到 OS 账户名,
+//                  这里用 OS+Browser 组合作为最贴近的可解析标识
+//   - isAdmin:     访问发生时是否持有有效 admin session
+//   - path:        访问的页面路径,区分 "/"、"/admin"、"/admin/messages" 等
+model Visitor {
+  id          String   @id @default(cuid())
+  visitAt     DateTime @default(now())
+  ip          String
+  deviceType  String
+  deviceModel String
+  deviceOs    String
+  deviceName  String
+  userName    String
+  isAdmin     Boolean  @default(false)
+  path        String   @default("/")
+  userAgent   String   @default("")
+
+  @@index([visitAt])
+  @@index([ip])
+}
