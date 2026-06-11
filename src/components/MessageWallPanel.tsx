@@ -10,6 +10,9 @@ interface Props {
   speedSeconds?: number;
 }
 
+
+
+
 // Floating right-side panel that hosts the scrolling message wall.
 // Pure text only: no header, no borders, no backgrounds, no cards. The
 // message text + author + time are the only visible elements; everything
