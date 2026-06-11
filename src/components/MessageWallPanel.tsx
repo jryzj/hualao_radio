@@ -66,14 +66,30 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
         "md:right-5 md:w-[300px] md:max-h-[calc(100vh-32px)]",
         "lg:right-7 lg:w-[320px]",
         "3xl:right-9 3xl:w-[360px]",
-        // Landscape short — re-anchor to the TOP-RIGHT and cap height.
-        // The default `top-1/2 -translate-y-1/2` centers the panel
-        // vertically on the right edge, which collides with the
-        // bottom-right FAB stack on phone landscape (360–420h). Moving
-        // it to top + removing the vertical centering clears the FAB
-        // area while keeping the slide-in-from-right animation.
-        "landscape-short:top-3 landscape-short:bottom-auto landscape-short:max-h-[200px]",
-        "landscape-shorter:top-2.5 landscape-shorter:bottom-auto landscape-shorter:max-h-[170px]",
+        // Landscape short — re-anchor to the right edge, centered in the
+        // vertical space ABOVE the bottom-right FAB stack (rather than
+        // pinned to the top, which felt visually "too high" and left
+        // an awkward empty band between the panel and the FAB).
+        //
+        // Geometry: the FAB container sits at `bottom-[14px]` with two
+        // 44px buttons in a single row, so the top of the FAB stack is
+        // at `视口高 - 58px` from the viewport top. We want the panel's
+        // vertical CENTER at the midpoint of (0, FAB_top), which is
+        // `(视口高 - 58) / 2 = 50% - 29px` in CSS. The inline
+        // `translate(0, -50%)` in transitionStyle makes the panel's
+        // center land at the `top` value, so this calc directly
+        // positions the center. Result: the panel is symmetrically
+        // placed between the top edge and the FAB, and the formula
+        // adapts to any landscape viewport height in [360, 500].
+        //
+        // Why same formula for both landscape-short and
+        // landscape-shorter: the FAB position is identical (it's at
+        // the bottom of the viewport, not the panel's), and the
+        // `-50%` Y translation adapts to whatever panel height the
+        // `max-h` cap allows (200 vs 170) — the visual center stays
+        // at the same `top` value either way.
+        "landscape-short:top-[calc(50%-29px)] landscape-short:bottom-auto landscape-short:max-h-[200px]",
+        "landscape-shorter:top-[calc(50%-29px)] landscape-shorter:bottom-auto landscape-shorter:max-h-[170px]",
       )}
     >
       <div className="flex flex-none flex-col border-0 bg-transparent p-0 shadow-none outline-none [&>*]:w-full">

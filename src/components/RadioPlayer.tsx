@@ -571,22 +571,18 @@ export function RadioPlayer({
         </div>
 
         {/* === Transport — PLAY + segmented volume ====================
-            1-col (portrait): row, centered. 2-col (`wide:`): the
-            transport row stacks VERTICALLY in phone landscape to keep
-            the PLAY button and volume container from competing for
-            horizontal space against the absolutely-positioned
-            visualizer overlay on the right half of the card. On
-            narrow phone-landscape viewports (≤509px wide, where the
-            card itself is only ~336px) the visible left half is
-            ~168px — narrower than a single row containing both
-            items. Stacking fixes the overflow.
-
-            The `wide:flex-col` is scoped to phone-landscape (the
-            `landscape-any` media query in globals.css only matches
-            when height ≤ 500px). On `lg+` landscape (desktop,
-            ≥1024 wide) the visualizer is on the LEFT and the text
-            stack on the RIGHT, so there's plenty of horizontal
-            space — we keep the row layout there via `lg:flex-row`.
+            Single horizontal row in every layout regime. The PLAY
+            button and volume container sit side-by-side, centered
+            in 1-col (portrait) and left-aligned in 2-col (`wide:`)
+            where the text-stack lives in col 1 (capped at 50% of
+            the card width — see the grid comment above for why).
+            The col 1 cap of 50% guarantees there's enough room on
+            the same line for both items in phone landscape:
+              - landscape-short:   PLAY ~84 + gap 8 + volume ~86 ≈ 178px
+              - landscape-shorter: PLAY ~72 + gap 6 + volume ~99 ≈ 177px
+              - landscape-xshort:  PLAY ~51 + gap 4 + volume ~57 ≈ 112px
+            All three fit comfortably in the 50% col of a 400-500px
+            card (200-250px), so the row layout works everywhere.
 
             iOS touch targets are >= 44px via the
             `supports-[-webkit-touch-callout:none]:min-h-[44px]`
@@ -599,12 +595,6 @@ export function RadioPlayer({
             "flex w-full flex-wrap items-center justify-center gap-3",
             "md:gap-4",
             "wide:justify-start",
-            // Stack in phone landscape (the only place width is
-            // tight). `lg:flex-row` restores horizontal layout on
-            // real desktop where the visualizer sits on the left
-            // and the right column has plenty of horizontal room.
-            "wide:flex-col wide:items-stretch landscape-any:flex-col",
-            "lg:flex-row lg:items-center",
             // Hairline above separates it from the identity block.
             "mt-2.5 border-t border-border-cyan/20 pt-3",
             "xs:mt-3 xs:pt-3.5",
@@ -613,14 +603,6 @@ export function RadioPlayer({
             "landscape-short:gap-2",
             "landscape-shorter:gap-1.5",
             "landscape-xshort:gap-1",
-            // Vertical rhythm for the stacked (wide:) layout. gap-2
-            // (8px) keeps the button and volume close enough that
-            // the row still reads as a single unit rather than two
-            // unrelated chips. Tighter in the smaller landscape
-            // tiers so the stacked pair fits in the 200-260px card.
-            "wide:gap-2",
-            "landscape-shorter:wide:gap-1.5",
-            "landscape-xshort:wide:gap-1",
           )}
         >
           <button
@@ -635,13 +617,6 @@ export function RadioPlayer({
               "landscape-short:px-2.5 landscape-short:py-1 landscape-short:text-[10px] landscape-short:tracking-[0.18em]",
               "landscape-shorter:px-2 landscape-shorter:py-0.5 landscape-shorter:text-[9px]",
               "landscape-xshort:px-1.5 landscape-xshort:py-0.5 landscape-xshort:text-[8px] landscape-xshort:tracking-[0.14em]",
-              // In the stacked (wide:flex-col) phone-landscape layout,
-              // the button stretches to the full text-col width via
-              // `wide:w-full` + `wide:justify-center` so the icon
-              // + label stay centered. `lg:w-auto` restores the
-              // intrinsic-width button on desktop.
-              "wide:w-full wide:justify-center",
-              "lg:w-auto lg:justify-center",
               isPlaying
                 ? "border-on-air-red/70 bg-[rgba(255,34,68,0.10)] text-on-air-red [box-shadow:0_0_14px_rgba(255,34,68,0.35),inset_0_0_14px_rgba(255,34,68,0.06)] hover:bg-[rgba(255,34,68,0.18)] hover:[box-shadow:0_0_28px_rgba(255,34,68,0.55),inset_0_0_20px_rgba(255,34,68,0.10)]"
                 : "border-neon-cyan/70 bg-[rgba(0,240,255,0.05)] text-neon-cyan [box-shadow:0_0_12px_rgba(0,240,255,0.20),inset_0_0_12px_rgba(0,240,255,0.05)] hover:-translate-y-px hover:bg-[rgba(0,240,255,0.12)] hover:[box-shadow:0_0_24px_rgba(0,240,255,0.45),inset_0_0_18px_rgba(0,240,255,0.10)]",
@@ -677,13 +652,6 @@ export function RadioPlayer({
               "landscape-short:px-2 landscape-short:py-1 landscape-short:gap-2",
               "landscape-shorter:px-1.5 landscape-shorter:py-0.5",
               "landscape-xshort:px-1 landscape-xshort:py-0.5",
-              // In the stacked (wide:flex-col) phone-landscape layout,
-              // the volume container stretches to the full text-col
-              // width. `lg:w-auto` restores intrinsic width on
-              // desktop. `wide:justify-center` keeps the slider
-              // visually centered in the wider stretched box.
-              "wide:w-full wide:justify-center",
-              "lg:w-auto lg:justify-center",
             )}
           >
             <span className="font-mono text-[9px] tracking-[0.18em] text-text-dim uppercase sm:tracking-[0.2em] landscape-any:hidden">Vol</span>
@@ -697,13 +665,6 @@ export function RadioPlayer({
                 "landscape-short:w-[36px]",
                 "landscape-shorter:w-[28px]",
                 "landscape-xshort:w-[24px]",
-                // In the stacked (wide:) phone-landscape layout the
-                // slider gets more room (the container is now the
-                // full text-col width minus padding). flex-1 lets it
-                // fill the available horizontal space so the dial
-                // visual has more segments to read as a "fader".
-                "wide:flex-1",
-                "lg:flex-none",
               )}
             >
               <div className="dial-segmented pointer-events-none">

@@ -48,8 +48,19 @@ export function EnterOverlay({ onEnter, visible }: Props) {
           live signal · ai-driven broadcast
         </p>
         <button
+          type="button"
           onClick={onEnter}
           autoFocus
+          // iOS 14.6 (iPhone 7) touch-event fix. The parent uses
+          // `fixed inset-0 z-[100]`, but the buttons are static-
+          // positioned children — on iOS Safari 14.6 the z-index
+          // does NOT propagate to static children, so a sibling
+          // composited layer (the radial-gradient overlay itself,
+          // since gradient + fixed positioning promotes it to its
+          // own layer) can swallow the first tap. Giving the
+          // button its own stacking context via position+zIndex
+          // guarantees the gesture lands on the handler.
+          style={{ position: "relative", zIndex: 1 }}
           className="mt-2 inline-flex cursor-pointer items-center gap-2 rounded-md border-[1.5px] border-neon-cyan bg-transparent px-8 py-4 text-sm font-medium uppercase tracking-[0.18em] text-neon-cyan transition-all [box-shadow:0_0_16px_rgba(0,240,255,0.2),inset_0_0_16px_rgba(0,240,255,0.05)] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.08)] hover:[box-shadow:0_0_32px_rgba(0,240,255,0.4),inset_0_0_24px_rgba(0,240,255,0.1)] active:translate-y-0 max-sm:px-5 max-sm:py-3.5 max-sm:text-xs max-sm:tracking-[0.12em] landscape-short:px-[18px] landscape-short:py-2.5 landscape-short:text-[11px]"
         >
           <span className="text-neon-magenta opacity-70">[</span>

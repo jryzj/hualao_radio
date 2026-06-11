@@ -987,13 +987,29 @@ export default function Home() {
 
       {/* Two mutually-exclusive floating action buttons (always visible) */}
       {messageFrontendVisible && (
-      <div className="fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[max(14px,env(safe-area-inset-bottom,14px))] z-50 flex flex-col items-end gap-2.5 md:right-6 md:bottom-6 md:gap-3 lg:right-8 lg:bottom-8 lg:gap-3.5 max-xs:right-3 max-xs:bottom-3 max-xs:gap-2 landscape-short:right-2.5 landscape-short:bottom-2.5">
+      <div className="fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[max(14px,env(safe-area-inset-bottom,14px))] z-50 flex flex-row items-end gap-2.5 md:right-6 md:bottom-6 md:gap-3 lg:right-8 lg:bottom-8 lg:gap-3.5 max-xs:right-3 max-xs:bottom-3 max-xs:gap-2 landscape-short:right-2.5 landscape-short:bottom-2.5">
+        {/* iOS 14.6 (iPhone 7) touch-event fix.
+            The outer container has `z-50` but the buttons are static-
+            positioned children — on iOS Safari 14.6 the z-index does NOT
+            propagate to static children, so a `backdrop-filter` (or any
+            composited layer) drawn later can intercept touch events and
+            the tap never reaches the handler. Three fixes per button:
+              1) `type="button"` — prevents any future form-ancestor
+                 accidental submit
+              2) `style={{ position: "relative", zIndex: 1 }}` — gives
+                 the button its own stacking context, lifts it above
+                 the container's z-50 sibling layer
+              3) drop `backdrop-blur-[16px]` — iOS 14.6 has a known
+                 GPU-compositor quirk where backdrop-filter on a
+                 hit-test target can swallow the first tap */}
         <button
+          type="button"
           onClick={toggleWall}
           aria-label={`${wallOpen ? "Hide" : "Show"} message panel`}
           aria-pressed={wallOpen}
+          style={{ position: "relative", zIndex: 1 }}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan backdrop-blur-[16px] shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
             wallOpen && "border-neon-cyan bg-[rgba(0,240,255,0.18)] text-bg-deep shadow-[0_0_24px_rgba(0,240,255,0.6)]",
           )}
         >
@@ -1003,11 +1019,13 @@ export default function Home() {
           </span>
         </button>
         <button
+          type="button"
           onClick={toggleInput}
           aria-label={`${inputOpen ? "Hide" : "Show"} message input`}
           aria-pressed={inputOpen}
+          style={{ position: "relative", zIndex: 1 }}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta backdrop-blur-[16px] shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
             inputOpen && "bg-[rgba(255,0,170,0.2)] text-bg-deep shadow-[0_0_24px_rgba(255,0,170,0.6)]",
           )}
         >
