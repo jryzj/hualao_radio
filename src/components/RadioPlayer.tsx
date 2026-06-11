@@ -145,7 +145,17 @@ export function RadioPlayer({
           // / md portrait). `wide:` (lg+ or phone landscape) flips it
           // to a 2-col split with the visualizer on the left and the
           // editorial typographic stack on the right.
-          "card-scanlines relative isolate grid w-full grid-cols-1 rounded-[18px] border border-border-cyan/60 backdrop-blur-xl",
+          // `overflow-hidden` is the hard fallback: the text col 1
+          // (minmax(180,380)) can grow up to 380px and the transport
+          // row's PLAY + volume can together exceed the visible left
+          // half of a narrow phone-landscape card (e.g. ~336px wide
+          // card on a 480px viewport → 168px visible left half,
+          // 178px transport row). Without the clip the items render
+          // past the card's right edge or get hidden behind the
+          // absolutely-positioned visualizer. The clip is harmless
+          // for the rounded corners and the backdrop-blur — the
+          // blur applies to what's behind the card, not its content.
+          "card-scanlines relative isolate grid w-full grid-cols-1 overflow-hidden rounded-[18px] border border-border-cyan/60 backdrop-blur-xl",
           // Outer halo — soft dual glow (cyan + violet) sits behind
           // the card. The `isPlaying` modifier tints the halo red so
           // the whole card visibly "powers on" when broadcasting.
@@ -158,7 +168,29 @@ export function RadioPlayer({
           "md:px-7 md:pt-8 md:pb-5",
           // 2-col split with magazine spine, larger gaps for the
           // typographic stack to breathe.
-          "wide:grid-cols-[minmax(180px,380px)_1fr] wide:items-center wide:gap-x-6 wide:gap-y-3 lg:px-7 lg:pt-7 lg:pb-5 landscape-any:grid-cols-[1fr_minmax(180px,380px)]",
+          //
+          // Col 1 is capped at `50%` of the card width (not 380px).
+          // The visualizer is absolutely positioned at `left-1/2
+          // right-0` (the right half), so col 1 must not exceed 50%
+          // or the text-stack content (theme name, transport row)
+          // bleeds into the visualizer's area. The previous
+          // `minmax(180px, 380px)` allowed col 1 to grow to 380px,
+          // which on a 500px card pushed the right edge of the
+          // text-stack (380px) past the visualizer's left edge
+          // (250px) by 130px — the PLAY button and volume bar
+          // rendered under the visualizer or past the card's right
+          // edge. Capping at 50% guarantees no overlap regardless
+          // of card width.
+          //
+          // The `landscape-any:grid-cols-[1fr_minmax(180px,380px)]`
+          // override that used to live here has been removed: it
+          // tried to flip the visualizer/text-stack order in phone
+          // landscape, but the visualizer is absolute (not in the
+          // grid flow) so the override only put the text-stack in
+          // col 2 — which sits exactly where the visualizer overlay
+          // lives — making the overlap worse, not better. Phone
+          // landscape now uses the same grid as desktop.
+          "wide:grid-cols-[minmax(180px,50%)_1fr] wide:items-center wide:gap-x-6 wide:gap-y-3 lg:px-7 lg:pt-7 lg:pb-5",
            // Designed card height — exact per viewport (a deliberate
           // aesthetic constant, not content-driven). In 2-col mode
           // (`wide:`), the card is a fixed height that accommodates
@@ -260,7 +292,20 @@ export function RadioPlayer({
         <div
           className={cn(
             "flex flex-col items-center",
-            "wide:col-span-1 wide:row-start-2 wide:col-start-1 wide:flex wide:flex-col wide:items-start wide:gap-1.5 wide:justify-center landscape-any:col-start-1",
+            // `min-w-0` is required because the text-stack is a CSS
+            // grid item. Grid items default to `min-width: auto`,
+            // which means they refuse to shrink below their
+            // content's intrinsic width. Without `min-w-0`, a long
+            // theme name in the identity block could force the
+            // text-stack to grow wider than its allotted 50% col,
+            // pushing the transport row (PLAY + volume) past the
+            // visualizer's left edge at 50% of the card. `min-w-0`
+            // lets the item shrink to fit, and the transport row
+            // already wraps via `flex-col` (see below) so vertical
+            // stacking is the fallback rather than horizontal
+            // overflow.
+            "wide:min-w-0",
+            "wide:col-span-1 wide:row-start-2 wide:col-start-1 wide:flex wide:flex-col wide:items-start wide:gap-1.5 wide:justify-center",
           )}
         >
 
@@ -526,7 +571,19 @@ export function RadioPlayer({
         </div>
 
         {/* === Transport — PLAY + segmented volume ====================
-            1-col: row, centered. 2-col: right col row, left-aligned.
+            Single horizontal row in every layout regime. The PLAY
+            button and volume container sit side-by-side, centered
+            in 1-col (portrait) and left-aligned in 2-col (`wide:`)
+            where the text-stack lives in col 1 (capped at 50% of
+            the card width — see the grid comment above for why).
+            The col 1 cap of 50% guarantees there's enough room on
+            the same line for both items in phone landscape:
+              - landscape-short:   PLAY ~84 + gap 8 + volume ~86 ≈ 178px
+              - landscape-shorter: PLAY ~72 + gap 6 + volume ~99 ≈ 177px
+              - landscape-xshort:  PLAY ~51 + gap 4 + volume ~57 ≈ 112px
+            All three fit comfortably in the 50% col of a 400-500px
+            card (200-250px), so the row layout works everywhere.
+
             iOS touch targets are >= 44px via the
             `supports-[-webkit-touch-callout:none]:min-h-[44px]`
             variant — the volume thumb is also enlarged on iOS for
@@ -597,7 +654,7 @@ export function RadioPlayer({
               "landscape-xshort:px-1 landscape-xshort:py-0.5",
             )}
           >
-            <span className="font-mono text-[9px] tracking-[0.18em] text-text-dim uppercase sm:tracking-[0.2em] landscape-short:hidden">Vol</span>
+            <span className="font-mono text-[9px] tracking-[0.18em] text-text-dim uppercase sm:tracking-[0.2em] landscape-any:hidden">Vol</span>
             <div
               className={cn(
                 "relative",
