@@ -39,6 +39,26 @@ const DEFAULT_BUFFER_CFG: AudioBufferCfg = {
 const ENTERED_KEY = "radioai.entered";
 const SILENT_WAV_DATA_URI =
   "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTAAAAAA";
+const CLIENT_ID_KEY = "radioai.clientId";
+
+// Each browser session has a stable clientId stored in localStorage.
+// The engine uses it to distinguish "client A stopped playing" from
+// "client A is gone" — without it, a single global flag would let
+// one listener's STOP pause the engine for everyone (the bug fixed
+// by per-client tracking in /api/live/playing). Same browser across
+// tabs shares the same id so multi-tab STOP doesn't trip the engine
+// for the wrong listener.
+function getOrCreateClientId(): string {
+  if (typeof window === "undefined") return "ssr";
+  let id = window.localStorage.getItem(CLIENT_ID_KEY);
+  if (!id) {
+    id = (typeof crypto !== "undefined" && "randomUUID" in crypto)
+      ? crypto.randomUUID()
+      : `c_${Math.random().toString(36).slice(2)}_${Date.now().toString(36)}`;
+    window.localStorage.setItem(CLIENT_ID_KEY, id);
+  }
+  return id;
+}
 
 function detectAudioMime(bytes: Uint8Array): string {
   if (
@@ -840,6 +860,14 @@ export default function Home() {
     audioSocketBackoffRef.current = 1000;
     connectAudioSocket(t.id);
     setIsPlaying(true);
+    // Tell the engine a client is now playing. fire-and-forget; the
+    // 5s stats poller is the ultimate source of truth for online
+    // count, so a missed POST just delays resume by up to 5s.
+    fetch("/api/live/playing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playing: true, clientId: getOrCreateClientId() }),
+    }).catch(() => {});
   }, [connectAudioSocket, ensureAudioReady]);
 
   const stopPlayback = useCallback(() => {
@@ -877,6 +905,16 @@ export default function Home() {
     setQueueLength(0);
     updateBufferStatus();
     setIsPlaying(false);
+    // Tell the engine this client has stopped playing. Other clients
+    // (different clientId) keep their entry in the engine's
+    // playingClients set, so the engine keeps generating for them.
+    // When the last listener stops, the set empties and the engine
+    // pauses on its next 5s poll tick.
+    fetch("/api/live/playing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playing: false, clientId: getOrCreateClientId() }),
+    }).catch(() => {});
   }, [updateBufferStatus]);
 
   const togglePlay = useCallback(() => {
@@ -945,6 +983,16 @@ export default function Home() {
     updateBufferStatus();
     playNext();
     fetch("/api/live/playback-complete", { method: "POST" }).catch(() => {});
+    // The ref flips here even though setIsPlaying(false) doesn't fire
+    // — the user intent is unchanged, but the practical effect is
+    // "no audio is playing right now". Report playing=false so the
+    // engine knows this client no longer has audio flowing; another
+    // client (different clientId) can keep the engine running.
+    fetch("/api/live/playing", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ playing: false, clientId: getOrCreateClientId() }),
+    }).catch(() => {});
   }, [playNext, updateBufferStatus]);
 
   const onAudioError = useCallback(() => {

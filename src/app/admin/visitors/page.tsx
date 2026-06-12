@@ -22,7 +22,18 @@ interface PageResponse {
   pageSize: number;
 }
 
+interface OnlineStats {
+  audioClients: number;
+  messageClients: number;
+  online: number;
+}
+
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
+// Refresh the live online count every 5s. The /api/admin/visitors
+// reload runs on its own cadence (page/filters change) and could be
+// much slower, so a dedicated interval keeps the "当前在线" badge
+// from feeling stale without coupling it to the table re-render.
+const ONLINE_POLL_MS = 5000;
 
 // Admin visitors log. Mirrors the /admin/messages layout (table +
 // pagination + filters) so the two pages feel like siblings.
@@ -51,6 +62,11 @@ export default function VisitorsPage() {
   const [pathPrefixInput, setPathPrefixInput] = useState("");
   const [isAdmin, setIsAdmin] = useState<"all" | "admin" | "guest">("all");
 
+  // Live online counts from the ws-server. `null` means "haven't
+  // heard back yet" (initial load or transient failure) so the badge
+  // shows a dash instead of a misleading 0.
+  const [online, setOnline] = useState<OnlineStats | null>(null);
+
   const reload = useCallback(async () => {
     const params = new URLSearchParams({
       page: String(page),
@@ -77,6 +93,28 @@ export default function VisitorsPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { reload(); }, [reload]);
 
+  // Poll the ws-server for live client counts. Independent of the
+  // table reload so the badge stays fresh even when the admin
+  // isn't paging through rows. The interval is unref'd by clearing
+  // it on unmount, so a route change can't leak timers.
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchOnline() {
+      try {
+        const res = await fetch("/api/admin/online");
+        if (!res.ok) return;
+        const data = (await res.json()) as OnlineStats;
+        if (!cancelled) setOnline(data);
+      } catch {
+        // Network blip — keep the last known value, don't blank
+        // the badge on a transient failure.
+      }
+    }
+    fetchOnline();
+    const id = setInterval(fetchOnline, ONLINE_POLL_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
   function applyFilters() {
     setQ(qInput);
     setPathPrefix(pathPrefixInput);
@@ -95,7 +133,10 @@ export default function VisitorsPage() {
 
   return (
     <div className="p-4 text-[#f0ece4]">
-      <h1 className="mb-4">访问者记录</h1>
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <h1>访问者记录</h1>
+        <OnlineBadge stats={online} />
+      </div>
 
       {/* Filters */}
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-md border border-[#2a2a32] [background:linear-gradient(145deg,#1a1a20,#222228)] p-3">
@@ -275,6 +316,38 @@ function DeviceTypeBadge({ type }: { type: string }) {
     <span className={`rounded border px-1.5 py-0.5 text-[10px] tracking-wider ${cfg.color}`}>
       {cfg.label}
     </span>
+  );
+}
+
+// "当前在线 N" badge. Sits next to the page title so it's the first
+// thing an admin sees on this page. Shows a dash on initial load /
+// transient failure rather than 0, so a startup blip doesn't look
+// like "nobody's listening" at a glance. The pulsing dot borrows
+// from the cyan accent used elsewhere on the dashboard.
+function OnlineBadge({ stats }: { stats: OnlineStats | null }) {
+  const count = stats?.online ?? null;
+  const label = count === null ? "—" : String(count);
+  return (
+    <div
+      className="flex items-center gap-2 rounded-md border border-[#2a2a32] bg-[#0a0a0c] px-3 py-1.5 text-xs"
+      title={
+        stats
+          ? `音频 ${stats.audioClients} · 消息 ${stats.messageClients}`
+          : "正在获取在线人数…"
+      }
+    >
+      <span className="relative flex h-2 w-2">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00f0ff] opacity-50" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00f0ff]" />
+      </span>
+      <span className="text-[#9a958c]">当前在线</span>
+      <span className="font-mono text-base font-semibold text-[#e8a84c]">{label}</span>
+      {stats && (
+        <span className="text-[10px] text-[#5a5850]">
+          音频 {stats.audioClients} · 消息 {stats.messageClients}
+        </span>
+      )}
+    </div>
   );
 }
 

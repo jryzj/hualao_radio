@@ -16,11 +16,32 @@ const globalState = globalThis as unknown as {
   liveEngineSegmentCount: number;
   shouldStop: boolean;
   conversationHistory: Map<string, ConversationTurn[]>;
+  // Pause-when-nobody's-listening feature (per-client tracking):
+  //   playingClients     — Set<clientId> of clients that have reported
+  //                         isPlaying === true since last clear. The
+  //                         engine runs as long as the set is non-empty
+  //                         AND there's at least one WS client. The 5s
+  //                         poller clears this set when online===0 (no
+  //                         one connected → any "playing" report is
+  //                         stale). A single clientId per browser is
+  //                         minted in src/app/page.tsx and shared across
+  //                         tabs, so multi-tab STOP doesn't trip the
+  //                         engine for the wrong listener.
+  //   lastKnownOnline    — cache of wsGetStats().online, refreshed by
+  //                        the 5s poller. Starts at 0 so a fresh boot
+  //                        is "paused until proven otherwise".
+  //   onlineStatsInterval — 5s poller handle, on globalThis for HMR.
+  playingClients: Set<string>;
+  lastKnownOnline: number;
+  onlineStatsInterval: ReturnType<typeof setInterval> | null;
 };
 if (globalState.liveEngineRunning === undefined) globalState.liveEngineRunning = false;
 if (globalState.liveEngineSegmentCount === undefined) globalState.liveEngineSegmentCount = 0;
 if (globalState.shouldStop === undefined) globalState.shouldStop = false;
 if (globalState.conversationHistory === undefined) globalState.conversationHistory = new Map();
+if (globalState.playingClients === undefined) globalState.playingClients = new Set();
+if (globalState.lastKnownOnline === undefined) globalState.lastKnownOnline = 0;
+if (globalState.onlineStatsInterval === undefined) globalState.onlineStatsInterval = null;
 
 export interface LiveEngineCallbacks {
   onAudioReady?: (audioBuffer: Buffer) => void;
@@ -50,7 +71,22 @@ class LiveEngine {
     this.callbacks = callbacks;
     globalState.liveEngineRunning = true;
     globalState.shouldStop = false;
+    // Don't reset clientPlaying/lastKnownOnline here — they belong to
+    // the world outside the engine, and overwriting them at start()
+    // would let a stale "playing=true" from a previous run keep the
+    // engine running before the new client has a chance to report.
+    // stop() is the right place to reset.
     this.llmAbortController = new AbortController();
+    this.startOnlineStatsPoller();
+    // Startup heartbeat: tells ops in the log that the engine booted
+    // and which state it landed in. The poller will fill in the real
+    // online count on its first tick; for now we report based on
+    // whatever the cached state is (always "paused" on a fresh boot
+    // because the cache starts at 0).
+    console.log(
+      `[LiveEngine] started, ${this.pauseCheck() ? "paused" : "running"} ` +
+      `(online=${globalState.lastKnownOnline}, playingClients=${globalState.playingClients.size})`,
+    );
     this.generateNextSegment();
   }
 
@@ -62,11 +98,173 @@ class LiveEngine {
     this.pendingRounds = [];
     this.currentRound = null;
     this.isGeneratingLLM = false;
+    // Clear pause-feature state on stop so a subsequent start() begins
+    // from a clean "nobody's listening, nobody's playing" baseline.
+    // Otherwise stale clientIds in the set would carry over and the
+    // new client would have to report playing=true again before
+    // generation kicks in.
+    globalState.playingClients.clear();
+    globalState.lastKnownOnline = 0;
+    this.stopOnlineStatsPoller();
     import("@/lib/ws-server").then(m => m.wsFlush()).catch(() => {});
   }
 
   isRunning(): boolean {
     return globalState.liveEngineRunning;
+  }
+
+  // Single source of truth for "should I be generating audio right
+  // now?" Returns true (= paused) when:
+  //   - an explicit stop was requested, OR
+  //   - the engine isn't started at all, OR
+  //   - no WS client is currently connected (lastKnownOnline === 0), OR
+  //   - no client has reported isPlaying === true (set is empty).
+  //
+  // Per-client tracking matters: a single global boolean would let
+  // one listener's STOP pause the engine for everyone else. The set
+  // of currently-playing clientIds is maintained by
+  // reportClientPlaying() and cleared by the 5s poller whenever
+  // online goes to 0 (the stale-cleanup step).
+  //
+  // We keep the formula in one method so the three guard sites
+  // (processNextUnit / generateNextSegment / line-190 self-perpetuation)
+  // can't drift out of sync.
+  pauseCheck(): boolean {
+    if (globalState.shouldStop) return true;
+    if (!globalState.liveEngineRunning) return true;
+    return globalState.lastKnownOnline === 0 || globalState.playingClients.size === 0;
+  }
+
+  // Called by /api/live/playing whenever the browser flips its
+  // isPlaying state. `clientId` is required so we can tell which
+  // client is reporting; without it (empty body, legacy client) we
+  // ignore the call rather than guess. Adding/removing from the set
+  // is the only state mutation — pauseCheck() does the rest.
+  reportClientPlaying(playing: boolean, clientId?: string): void {
+    if (!clientId) return; // defensive — endpoint also validates
+    const wasPaused = this.pauseCheck();
+    if (playing) {
+      globalState.playingClients.add(clientId);
+    } else {
+      globalState.playingClients.delete(clientId);
+    }
+    const isPausedNow = this.pauseCheck();
+    const short = clientId.slice(0, 8);
+    if (wasPaused && !isPausedNow) {
+      console.log(`[LiveEngine] clientId=${short}… playing=true (was paused, resuming)`);
+      this.resumeFromPause();
+    } else {
+      console.log(
+        `[LiveEngine] clientId=${short}… playing=${playing} ` +
+        `(set size=${globalState.playingClients.size}, no resume trigger)`,
+      );
+    }
+  }
+
+  // Drop any half-baked audio work and kick a fresh segment. Called
+  // when the engine transitions from "paused" → "should run". We don't
+  // try to splice in the in-flight round because the LLM response
+  // text is no longer relevant once we've been sitting paused for
+  // seconds-to-minutes — and a new segment is what listeners want
+  // when they just arrived.
+  private resumeFromPause(): void {
+    // Abort any in-flight LLM fetch — the prompt context is stale.
+    this.llmAbortController?.abort();
+    this.llmAbortController = new AbortController();
+    // Drop pending work; the in-flight processNextUnit will return
+    // naturally because its top guard now sees pauseCheck()=true.
+    this.pendingRounds = [];
+    this.currentRound = null;
+    this.pendingMessages = [];
+    this.isGeneratingLLM = false;
+    if (!this.isGeneratingLLM) {
+      this.generateNextSegment();
+    }
+  }
+
+  // 5s poller: keeps globalState.lastKnownOnline in sync with the
+  // ws-server's actual client count. Also serves as the wake-up
+  // trigger for the "a new listener just connected while we were
+  // paused" case — the client may not have hit PLAY yet, but
+  // audioClients > 0 means we should start generating.
+  //
+  // We poll rather than push because (a) the ws-server already has a
+  // token-protected HTTP API that returns exactly this number, and
+  // (b) it keeps the engine's view consistent with what the admin
+  // /visitors page sees — same 5s cadence, same source of truth.
+  private startOnlineStatsPoller(): void {
+    if (globalState.onlineStatsInterval) return; // already running
+    let lastPaused = this.pauseCheck();
+    // Steady-state heartbeat: every PAUSED_HEARTBEAT_TICKS polls
+    // (~1 minute at 5s/tick) emit a "still paused" log line so ops
+    // can see at a glance that the engine is alive but idle. Without
+    // this the log is silent during a long idle period, which makes
+    // a healthy "no one's listening" state look identical to "the
+    // engine crashed". The counter resets on every transition so a
+    // fresh "still paused" line appears ~1 minute after a listener
+    // disconnects.
+    const PAUSED_HEARTBEAT_TICKS = 12;
+    let pausedTicks = 0;
+    const tick = async () => {
+      if (!globalState.liveEngineRunning) return;
+      let online = 0;
+      try {
+        // Lazy import — same pattern comfyui/index.ts uses for
+        // wsBroadcast, so we don't introduce a load-order cycle.
+        const mod = await import("@/lib/ws-server");
+        const stats = await mod.wsGetStats();
+        online = stats?.online ?? 0;
+      } catch {
+        // ws-server may be down; treat as "no listeners" and stay
+        // paused. Don't crash the poller — the next tick will retry.
+        online = 0;
+      }
+      globalState.lastKnownOnline = online;
+      // Stale cleanup: if no one has a WS connection open, then any
+      // "playing" report we received earlier is from a now-gone
+      // browser. Drop them from the set so a fresh listener (whose
+      // clientId is different) gets a clean start. Run BEFORE
+      // pauseCheck() so the transition detector sees the new state.
+      if (online === 0 && globalState.playingClients.size > 0) {
+        console.log(
+          `[LiveEngine] online=0, clearing stale playingClients set ` +
+          `(size=${globalState.playingClients.size})`,
+        );
+        globalState.playingClients.clear();
+      }
+      const pausedNow = this.pauseCheck();
+      if (lastPaused && !pausedNow) {
+        console.log(`[LiveEngine] online=${online}, transitioning out of pause, resuming`);
+        this.resumeFromPause();
+        pausedTicks = 0;
+      } else if (pausedNow) {
+        pausedTicks++;
+        if (pausedTicks === PAUSED_HEARTBEAT_TICKS) {
+          console.log(
+            `[LiveEngine] still paused (online=${online}, ` +
+            `playingClients=${globalState.playingClients.size})`,
+          );
+          pausedTicks = 0;
+        }
+      } else {
+        // Running. We don't log every tick (would be spammy) — the
+        // Submitting TTS unit / First TTS unit logs from the
+        // generation loop itself are the running-state heartbeat.
+        pausedTicks = 0;
+      }
+      lastPaused = pausedNow;
+    };
+    // Fire one immediately so the first pause-check after start() has
+    // real data, then every 5s after that.
+    void tick();
+    globalState.onlineStatsInterval = setInterval(() => { void tick(); }, 5_000);
+  }
+
+  private stopOnlineStatsPoller(): void {
+    if (globalState.onlineStatsInterval) {
+      clearInterval(globalState.onlineStatsInterval);
+      globalState.onlineStatsInterval = null;
+    }
   }
 
   onPlaybackComplete(): void {
@@ -130,6 +328,13 @@ class LiveEngine {
   // Process the next TTS unit (sentence / group of N sentences / whole paragraph) in current round
   private async processNextUnit() {
     if (!this.currentRound || globalState.shouldStop) return;
+    // Pause guard: if the engine transitioned into pause state while
+    // this recursion was in flight, fall off. The in-flight TTS
+    // already-completed unit will have broadcast to zero listeners
+    // (no-op); the next recursion (line 194 below) won't happen
+    // because we return here. resumeFromPause() clears currentRound
+    // so a future generateNextSegment() starts clean.
+    if (this.pauseCheck()) return;
 
     const round = this.currentRound;
     const cfg = this.bufferCfg;
@@ -185,7 +390,7 @@ class LiveEngine {
     round.ttsIndex += advanceBy;
 
     // 第一个 TTS 单元完成时触发下一轮 LLM
-    if (completedIndex === 0 && globalState.liveEngineRunning && !globalState.shouldStop) {
+    if (completedIndex === 0 && globalState.liveEngineRunning && !globalState.shouldStop && !this.pauseCheck()) {
       console.log(`[LiveEngine] First TTS unit of round ${round.roundId} complete, triggering next LLM`);
       this.generateNextSegment();
     }
@@ -270,6 +475,10 @@ class LiveEngine {
   // Generate LLM content and add to pending queue
   private async generateNextSegment() {
     if (globalState.shouldStop || !globalState.liveEngineRunning || this.isGeneratingLLM) return;
+    // Pause guard: skip the LLM fetch entirely if nobody's listening
+    // and no client has reported isPlaying. The chain resumes from
+    // resumeFromPause() when the poller detects a transition.
+    if (this.pauseCheck()) return;
 
     this.isGeneratingLLM = true;
     try {

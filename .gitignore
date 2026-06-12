@@ -34,8 +34,9 @@ yarn-error.log*
 *.log
 *.pid
 
-# env files (can opt-in for committing if needed)
-.env
+# env files — all variants ignored; .env.example is committed as a template
+.env*
+!.env.example
 
 # vercel
 .vercel
@@ -59,6 +60,10 @@ next-env.d.ts
 
 # TTS voice-clone reference samples (proprietary voice data, kept locally)
 /workflows/*.flac
+/workflows/*.mp3
+/workflows/*.wav
+/workflows/*.ogg
+/workflows/*.m4a
 
 # Internal-only project documents (not for the public repo)
 /PRD.md
@@ -74,6 +79,24 @@ next-env.d.ts
 /.claude/settings.local.json
 **/settings.local.json
 
+# Playwright MCP test artifacts (logs, page snapshots, screenshots)
+/.playwright-mcp/
+
+# Server process output captures (set by some dev launchers)
+.server-err.txt
+.server-out.txt
+
+# Editor / IDE workspace state
+/.vscode/
+/.idea/
+
+# Build / cache dirs (created by Next 15 / Turbopack / various tooling)
+/dist/
+/.turbo/
+/.cache/
+/tmp/
+/temp/
+
 # SQLite WAL and shared-memory files (companions to dev.db)
 *.db-shm
 *.db-wal
@@ -81,3 +104,4 @@ next-env.d.ts
 # Script-generated screenshots and visual test artifacts
 /scripts/*.png
 
+cookies.txt
