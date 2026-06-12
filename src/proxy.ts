@@ -19,6 +19,12 @@ const PUBLIC_LIVE_PATHS = new Set<string>([
   "/api/live/status",            // GET — returns { running: bool }, info only
   "/api/live/playback-complete", // POST — fired by the public listener page
                                   //         when audio finishes playing
+  "/api/live/playing",           // POST — fired by the public listener page
+                                  //         on isPlaying flip; the engine
+                                  //         gate (online > 0 && playing)
+                                  //         already prevents this from
+                                  //         being abused to make the
+                                  //         engine generate on its own.
 ]);
 
 function getSecret(): string | null {

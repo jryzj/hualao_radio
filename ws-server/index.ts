@@ -207,6 +207,22 @@ const httpServer = http.createServer((req, res) => {
         res.end(JSON.stringify({ error: "invalid" }));
       }
     });
+  } else if (req.method === "GET" && req.url === "/stats") {
+    // Live client counts for the admin dashboard. audioClients are
+    // listeners on the /audio WS (people hearing the radio right now);
+    // messageClients are browsers with the /messages WS open (the
+    // homepage live-message feed, usually the same listeners, but
+    // sometimes admin-only viewers of the message stream). The admin
+    // page sums them; we just return the raw counts so the API is
+    // self-explanatory and a future caller can decide differently.
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(
+      JSON.stringify({
+        audioClients: audioClients.size,
+        messageClients: messageClients.size,
+        online: audioClients.size + messageClients.size,
+      }),
+    );
   } else {
     res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "not found" }));

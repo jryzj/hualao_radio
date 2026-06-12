@@ -34,6 +34,7 @@ yarn-error.log*
 *.log
 *.pid
 
+
 # env files (can opt-in for committing if needed)
 .env
 .env.local
@@ -44,7 +45,11 @@ yarn-error.log*
 .env.test
 .env.test.local
 *.env.bak
-*.env.backup
+*.env.backup=======
+# env files — all variants ignored; .env.example is committed as a template
+.env*
+!.env.example
+
 
 # vercel
 .vercel
@@ -66,21 +71,14 @@ next-env.d.ts
 # uploaded reference audio (admin workflow uploads)
 /public/uploads/
 
-# TTS voice-clone reference samples (proprietary voice data, kept locally).
-# ComfyUI TTS outputs include .wav, .ogg, .m4a, .aac in addition to the
-# flac/mp3 we explicitly upload as ref-audio. Ignore the common set.
-*.flac
-*.wav
-*.ogg
-*.m4a
-*.aac
-/workflows/*.mp3
-/public/uploads/
 
-# TTS-generated audio output (ComfyUI results)
-/comfyui-output/
-/.tts-cache/
-*.tts-output.*
+# TTS voice-clone reference samples (proprietary voice data, kept locally)
+/workflows/*.flac
+/workflows/*.mp3
+/workflows/*.wav
+/workflows/*.ogg
+/workflows/*.m4a
+
 
 # Internal-only project documents (not for the public repo)
 /PRD.md
@@ -96,6 +94,24 @@ next-env.d.ts
 /.claude/settings.local.json
 **/settings.local.json
 
+# Playwright MCP test artifacts (logs, page snapshots, screenshots)
+/.playwright-mcp/
+
+# Server process output captures (set by some dev launchers)
+.server-err.txt
+.server-out.txt
+
+# Editor / IDE workspace state
+/.vscode/
+/.idea/
+
+# Build / cache dirs (created by Next 15 / Turbopack / various tooling)
+/dist/
+/.turbo/
+/.cache/
+/tmp/
+/temp/
+
 # SQLite WAL and shared-memory files (companions to dev.db)
 *.db-shm
 *.db-wal
@@ -105,6 +121,7 @@ next-env.d.ts
 
 # Script-generated screenshots and visual test artifacts
 /scripts/*.png
+
 
 # Runtime log files written at the project root when `npm start`/`npm run
 # dev` is launched in a way that captures stdout/stderr. The project's
@@ -189,3 +206,5 @@ $RECYCLE.BIN/
 *.ipr
 *.iws
 
+
+cookies.txt

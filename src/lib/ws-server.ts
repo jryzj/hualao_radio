@@ -66,3 +66,39 @@ export async function wsBroadcastMessage(
     console.error("[ws-server] /broadcast-message non-ok:", res.status);
   }
 }
+
+// Read-only stats from the ws-server: live client counts on each WS
+// path, plus a precomputed `online` total. Used by the admin visitors
+// page to display the current online user count. Returns null when the
+// ws-server is unreachable (not started, network down) so the admin
+// UI can degrade gracefully instead of crashing the page render.
+export interface WsStats {
+  audioClients: number;
+  messageClients: number;
+  online: number;
+}
+
+export async function wsGetStats(): Promise<WsStats | null> {
+  try {
+    const res = await fetch(`${BROADCAST_BASE}/stats`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${token()}` },
+    });
+    if (!res.ok) {
+      console.error("[ws-server] /stats non-ok:", res.status);
+      return null;
+    }
+    const data = (await res.json()) as Partial<WsStats>;
+    return {
+      audioClients: data.audioClients ?? 0,
+      messageClients: data.messageClients ?? 0,
+      online: data.online ?? 0,
+    };
+  } catch (err) {
+    // ws-server is optional; if it isn't running the admin dashboard
+    // should still render. Log once at debug level so we don't spam
+    // the log every poll.
+    console.error("[ws-server] /stats fetch failed:", err);
+    return null;
+  }
+}
