@@ -260,7 +260,11 @@ function resultsToInputs(results: Array<FtsResult | (TavilyResult & { sourceTitl
 
 async function pickRandomItems(cfg: Cfg): Promise<NewsItemInput[]> {
   const cutoff = new Date(Date.now() - cfg.activeWindowMs);
-  const poolSize = Math.max(cfg.maxNewsItems * 10, 30);
+  // Pool size is now operator-controlled via `newsPoolSize` (default 100).
+  // We still floor it at `maxNewsItems` so the operator can never set a
+  // pool smaller than the pick count, which would otherwise silently
+  // shrink the rendered {{news}} list.
+  const poolSize = Math.max(cfg.newsPoolSize, cfg.maxNewsItems);
 
   const candidates = await prisma.rssItem.findMany({
     where: {

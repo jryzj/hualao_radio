@@ -23,6 +23,7 @@ export async function PUT(req: NextRequest) {
       ? (body.tavilyTimeRange as NewsConfig["tavilyTimeRange"])
       : current.tavilyTimeRange,
     decisionModelName: typeof body.decisionModelName === "string" ? body.decisionModelName : current.decisionModelName,
+    newsPoolSize: numField(body.newsPoolSize, current.newsPoolSize, 1, 10_000),
   };
   await setNewsConfig(next);
   return NextResponse.json({ ok: true, config: next });

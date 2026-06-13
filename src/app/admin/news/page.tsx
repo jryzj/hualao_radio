@@ -42,6 +42,7 @@ interface NewsConfig {
   tavilyApiKey: string;
   tavilyTimeRange: "d" | "w" | "m" | "y";
   decisionModelName: string;
+  newsPoolSize: number;
 }
 
 interface Stats {
@@ -317,6 +318,7 @@ export default function NewsPage() {
               <Field label="RSS 并发抓取数" value={form.maxConcurrentFetches} onChange={(v) => setForm({ ...form, maxConcurrentFetches: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
               <Field label="决策 LLM 模型名（空=回退主 LLM）" value={form.decisionModelName} onChange={(v) => setForm({ ...form, decisionModelName: v })} type="text" inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
               <Field label="资讯条数上限（{{news}} 最多渲染几条）" value={form.maxNewsItems} onChange={(v) => setForm({ ...form, maxNewsItems: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
+              <Field label="资讯候选池大小（A 路径每次从最近 N 条里洗牌抽）" value={form.newsPoolSize} onChange={(v) => setForm({ ...form, newsPoolSize: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
               <Field label="单条字符上限（超出截断）" value={form.maxItemChars} onChange={(v) => setForm({ ...form, maxItemChars: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
               <Field label="总字符上限（整体截断）" value={form.maxTotalChars} onChange={(v) => setForm({ ...form, maxTotalChars: v })} inputClass={inputClass} fieldLabelClass={fieldLabelClass} />
             </div>
