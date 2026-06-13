@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
 import { AudioVisualizer } from "./AudioVisualizer";
-import { cn } from "@/lib/cn";
 
 interface Theme {
   id: string;
@@ -167,12 +166,7 @@ export function MinimalRadioPlayer({
             <button
               type="button"
               onClick={onTogglePlay}
-              className={cn(
-                "inline-flex min-h-[42px] min-w-[116px] items-center justify-center rounded-full px-4 text-[15px] font-semibold tracking-[0.12em] transition-all duration-200 sm:min-h-[46px] sm:min-w-[136px] sm:px-6 sm:text-[16px] md:min-h-[50px] md:min-w-[150px] md:text-[18px] max-xs:min-h-[36px] max-xs:min-w-[102px] max-xs:px-3.5 max-xs:text-[13px] landscape-short:min-h-[38px] landscape-short:min-w-[108px] landscape-short:px-4 landscape-short:text-[14px]",
-                isPlaying
-                  ? "bg-[#213047] text-white [box-shadow:0_0_0_2px_rgba(255,255,255,0.55),inset_0_0_0_1px_rgba(255,255,255,0.08)] hover:bg-[#1a2637]"
-                  : "bg-[#5f90c5] text-white [box-shadow:0_0_0_2px_rgba(49,85,127,0.9),inset_0_0_0_1px_rgba(255,255,255,0.12)] hover:bg-[#537fad]",
-              )}
+              className="inline-flex min-h-[42px] min-w-[116px] items-center justify-center rounded-full bg-[rgba(255,255,255,0.88)] px-4 text-[15px] font-semibold tracking-[0.12em] text-[#4f6d90] shadow-[0_12px_28px_rgba(95,144,197,0.12)] transition-all duration-200 hover:bg-white hover:text-[#3f5d80] sm:min-h-[46px] sm:min-w-[136px] sm:px-6 sm:text-[16px] md:min-h-[50px] md:min-w-[150px] md:text-[18px] max-xs:min-h-[36px] max-xs:min-w-[102px] max-xs:px-3.5 max-xs:text-[13px] landscape-short:min-h-[38px] landscape-short:min-w-[108px] landscape-short:px-4 landscape-short:text-[14px]"
             >
               {isPlaying ? "Pause" : "Play"}
             </button>
