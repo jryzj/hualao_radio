@@ -50,11 +50,9 @@ function formatClock(d: Date): string {
 export function MinimalRadioPlayer({
   theme,
   isPlaying,
-  volume,
   queueLength,
   analyser,
   onTogglePlay,
-  onVolumeChange,
 }: Props) {
   const [now, setNow] = useState<Date | null>(null);
   const [viewport, setViewport] = useState(getViewportSize);
@@ -151,28 +149,6 @@ export function MinimalRadioPlayer({
               </div>
             </div>
 
-            <div className="rounded-[18px] bg-white/82 px-2.5 py-2.5 sm:px-4 sm:py-3.5 max-xs:rounded-[14px] max-xs:px-2.5 max-xs:py-2 landscape-short:rounded-[16px] landscape-short:px-2.5 landscape-short:py-2.5">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-[#8b99ae] sm:text-[10px] max-xs:text-[8px] landscape-short:text-[8px]">
-                    Volume
-                  </span>
-                </div>
-                <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#5f718b] sm:text-[11px] max-xs:text-[9px] landscape-short:text-[9px]">
-                  {Math.round(volume * 100)}%
-                </span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={volume}
-                onChange={e => onVolumeChange(parseFloat(e.target.value))}
-                className="mist-volume mt-2.5 h-2 w-full cursor-pointer appearance-none rounded-full bg-transparent max-xs:mt-2 landscape-short:mt-2"
-                aria-label="Volume"
-              />
-            </div>
           </div>
         </div>
 
@@ -203,38 +179,6 @@ export function MinimalRadioPlayer({
           </div>
         </div>
       </div>
-
-      <style>{`
-        .mist-volume::-webkit-slider-runnable-track {
-          height: 8px;
-          border-radius: 999px;
-          background: linear-gradient(90deg, rgba(95, 144, 197, 0.18), rgba(95, 144, 197, 0.52));
-        }
-        .mist-volume::-moz-range-track {
-          height: 8px;
-          border-radius: 999px;
-          background: linear-gradient(90deg, rgba(95, 144, 197, 0.18), rgba(95, 144, 197, 0.52));
-        }
-        .mist-volume::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          margin-top: -6px;
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #ffffff;
-          border: 2px solid #5f90c5;
-          box-shadow: 0 6px 18px rgba(95, 144, 197, 0.22);
-        }
-        .mist-volume::-moz-range-thumb {
-          width: 20px;
-          height: 20px;
-          border-radius: 50%;
-          background: #ffffff;
-          border: 2px solid #5f90c5;
-          box-shadow: 0 6px 18px rgba(95, 144, 197, 0.22);
-        }
-      `}</style>
     </section>
   );
 }
