@@ -54,7 +54,7 @@ interface Props {
 //      xs / sm / md portrait, plus small landscape windows with
 //      height > 500. The card reads as a magazine page: ON AIR pill
 //      at top, STATION caption + RADIO·AI display title, mid-mono
-//      sub-bar (frequency · UTC · LIVE), visualizer, theme/host
+//      sub-bar (frequency · LOCAL · LIVE), visualizer, theme/host
 //      identity block with monogram, transport row, telemetry strip
 //      at the bottom.
 //
@@ -78,9 +78,13 @@ interface Props {
 //     12px) for the broadcast-instrument feel.
 //   - Outer glow: cyan + violet dual halo, soft. Hover: lift.
 
+// Local time on the viewer's device. We intentionally use the
+// browser's local clock here (not UTC) — the card is a broadcast
+// console, and the dialed-in "now" should match the time the
+// listener sees on their own clock.
 function formatTimestamp(d: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}`;
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
 // Stable pseudo-frequency: 70cm-band FM broadcast slot derived
@@ -351,9 +355,9 @@ export function RadioPlayer({
         </div>
 
         {/* === Sub-bar — mid-mono inline metadata strip ===============
-            Frequency · UTC time · LIVE. Sized 14-16px portrait →
+            Frequency · LOCAL time · LIVE. Sized 14-16px portrait →
             18-22px desktop, JetBrains Mono weight 500, tabular-nums.
-            Frequency in cyan, UTC in secondary, LIVE in red. Single
+            Frequency in cyan, LOCAL in secondary, LIVE in red. Single
             horizontal row, centered in 1-col, left-aligned in 2-col.
             This is the "broadcast dial" identity — the frequency
             was promoted from a small mono label to the secondary
@@ -381,7 +385,7 @@ export function RadioPlayer({
           </span>
           <span aria-hidden className="opacity-30 text-[0.85em]">·</span>
           <span className="inline-flex items-baseline gap-1.5 text-text-secondary tabular-nums">
-            <span className="opacity-50 text-[0.7em] tracking-[0.16em]">UTC</span>
+            <span className="opacity-50 text-[0.7em] tracking-[0.16em]">LOCAL</span>
             <span className="font-medium text-text-primary/85">
               {now ? formatTimestamp(now) : "--:--:--"}
             </span>
@@ -398,7 +402,7 @@ export function RadioPlayer({
         </div>
 
         {/* === Combined sub-bar + telemetry row (wide only) =============
-            Merges the mono metadata strip (frequency·UTC·LIVE) with the
+            Merges the mono metadata strip (frequency·LOCAL·LIVE) with the
             telemetry readout (WS|SIG|BUF|Q) into one horizontal row to
             save vertical space in 2-col layout. Hidden outside wide. */}
         <div
@@ -423,7 +427,7 @@ export function RadioPlayer({
             </span>
             <span aria-hidden className="opacity-30 text-[0.85em]">·</span>
             <span className="inline-flex items-baseline gap-1 text-text-secondary tabular-nums">
-              <span className="opacity-50 text-[0.7em] tracking-[0.16em]">UTC</span>
+              <span className="opacity-50 text-[0.7em] tracking-[0.16em]">LOCAL</span>
               <span className="font-medium text-text-primary/85">
                 {now ? formatTimestamp(now) : "--:--:--"}
               </span>
