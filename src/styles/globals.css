@@ -282,6 +282,34 @@
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
 }
 
+:root[data-display-theme="mist"] {
+  --bg-deep: #eef2f6;
+  --bg-surface: #f7f9fc;
+  --bg-elevated: #ffffff;
+  --bg-glass: rgba(255, 255, 255, 0.7);
+  --bg-glass-strong: rgba(255, 255, 255, 0.88);
+
+  --neon-cyan: #5f90c5;
+  --neon-cyan-dim: #7aa2c8;
+  --neon-magenta: #c78ba7;
+  --neon-violet: #91a0d6;
+  --neon-yellow: #d8ad6c;
+  --neon-pink: #d19db2;
+
+  --on-air-red: #d96a73;
+  --on-air-idle: #a58fc6;
+  --on-air-glow: 0 0 24px rgba(217, 106, 115, 0.2);
+  --idle-glow: 0 0 16px rgba(145, 160, 214, 0.18);
+
+  --text-primary: #213047;
+  --text-secondary: #5f718b;
+  --text-dim: #8b99ae;
+
+  --border: rgba(95, 144, 197, 0.16);
+  --border-strong: rgba(95, 144, 197, 0.28);
+  --border-magenta: rgba(199, 139, 167, 0.24);
+}
+
 /* CSS reset — Tailwind v4's preflight (emitted inside @layer base)
  * already sets `*, ::after, ::before, ::backdrop { box-sizing: border-box;
  * border: 0 solid; margin: 0; padding: 0 }`. Don't add another reset
@@ -319,6 +347,11 @@ body {
   touch-action: manipulation;
 }
 
+:root[data-display-theme="mist"] body {
+  background:
+    radial-gradient(circle at top, rgba(255, 255, 255, 0.95) 0%, rgba(240, 244, 249, 0.92) 34%, rgba(232, 238, 245, 0.96) 100%);
+}
+
 /* Ambient grid background — very subtle */
 body::before {
   content: "";
@@ -333,6 +366,17 @@ body::before {
   z-index: 0;
   mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
   -webkit-mask-image: radial-gradient(ellipse at center, black 0%, transparent 70%);
+}
+
+:root[data-display-theme="mist"] body::before {
+  background-image:
+    radial-gradient(circle at 18% 20%, rgba(255, 255, 255, 0.85) 0, rgba(255, 255, 255, 0) 28%),
+    radial-gradient(circle at 78% 14%, rgba(190, 210, 233, 0.35) 0, rgba(190, 210, 233, 0) 26%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0));
+  background-size: auto;
+  background-position: center;
+  mask-image: none;
+  -webkit-mask-image: none;
 }
 
 /* Scanline overlay */
@@ -350,6 +394,12 @@ body::after {
   pointer-events: none;
   z-index: 1;
   mix-blend-mode: screen;
+}
+
+:root[data-display-theme="mist"] body::after {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(95, 144, 197, 0.03));
+  mix-blend-mode: normal;
 }
 
 ::selection {

@@ -8,6 +8,7 @@ interface Props {
   onToggle: () => void;
   messages: WallMessage[];
   speedSeconds?: number;
+  variant?: "cyber" | "mist";
 }
 
 
@@ -59,7 +60,8 @@ export function MessageWallPanel({ open, onToggle, messages, speedSeconds = 80 }
       style={transitionStyle}
       className={cn(
         // Base positioning + transparency (text-only panel)
-        "fixed top-1/2 right-3 left-auto bottom-auto z-[60] flex w-[260px] flex-col overflow-hidden border-0 bg-transparent p-0 opacity-0 shadow-none outline-none backdrop-filter-none",
+        "fixed top-1/2 right-3 left-auto bottom-auto z-[60] flex w-[260px] flex-col overflow-hidden p-0 opacity-0 outline-none",
+        "border-0 bg-transparent shadow-none backdrop-filter-none",
         // Closed state: slide off-right + hide
         !open && "pointer-events-none invisible",
         // Open state: visible + slide in
