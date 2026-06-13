@@ -155,7 +155,7 @@ export function RadioPlayer({
           // absolutely-positioned visualizer. The clip is harmless
           // for the rounded corners and the backdrop-blur — the
           // blur applies to what's behind the card, not its content.
-          "card-scanlines relative isolate grid w-full grid-cols-1 overflow-hidden rounded-[18px] border border-border-cyan/60 backdrop-blur-xl",
+          "card-scanlines relative isolate grid w-full grid-cols-1 overflow-hidden rounded-[18px] backdrop-blur-xl",
           // Outer halo — soft dual glow (cyan + violet) sits behind
           // the card. The `isPlaying` modifier tints the halo red so
           // the whole card visibly "powers on" when broadcasting.

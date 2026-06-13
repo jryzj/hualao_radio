@@ -280,16 +280,22 @@ function WallItem({ message, variant = "default" }: { message: WallMessage; vari
           "mb-0.5 flex items-baseline gap-2",
           isPanel && "justify-end",
         )}>
-          <span className="font-display text-[11px] font-semibold uppercase tracking-[0.1em] text-neon-cyan">
+          <span className={cn(
+            "font-display text-[11px] font-semibold uppercase tracking-[0.1em]",
+            isPanel ? "text-[#213047]" : "text-neon-cyan",
+          )}>
             {message.authorName || "anonymous"}
           </span>
-          <span className="font-mono text-[9px] tracking-[0.05em] text-text-dim">
+          <span className={cn(
+            "font-mono text-[9px] tracking-[0.05em]",
+            isPanel ? "text-[#6d7f98]" : "text-text-dim",
+          )}>
             {formatTime(message.createdAt)}
           </span>
         </div>
         <p className={cn(
-          "m-0 break-words text-[13px] leading-[1.5] text-text-primary",
-          isPanel && "text-right",
+          "m-0 break-words text-[13px] leading-[1.5]",
+          isPanel ? "text-right text-[#213047]" : "text-text-primary",
         )}>
           {message.content}
         </p>

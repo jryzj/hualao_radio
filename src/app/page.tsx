@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { RadioPlayer } from "@/components/RadioPlayer";
+import { MinimalRadioPlayer } from "@/components/MinimalRadioPlayer";
 import { type WallMessage } from "@/components/MessageWall";
 import { MessageInputDrawer } from "@/components/MessageInputDrawer";
 import { MessageWallPanel } from "@/components/MessageWallPanel";
@@ -29,6 +30,14 @@ interface AudioBufferCfg {
   prebufferGroupSize: number;
 }
 
+type DisplayThemeId = "cyber" | "mist";
+
+interface DisplayThemeOption {
+  id: DisplayThemeId;
+  name: string;
+  description: string;
+}
+
 const DEFAULT_BUFFER_CFG: AudioBufferCfg = {
   prebufferSentences: 3,
   prebufferSeconds: 8,
@@ -37,9 +46,23 @@ const DEFAULT_BUFFER_CFG: AudioBufferCfg = {
 };
 
 const ENTERED_KEY = "radioai.entered";
+const DISPLAY_THEME_KEY = "radioai.displayTheme";
 const SILENT_WAV_DATA_URI =
   "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTAAAAAA";
 const CLIENT_ID_KEY = "radioai.clientId";
+
+const DISPLAY_THEME_OPTIONS: DisplayThemeOption[] = [
+  {
+    id: "cyber",
+    name: "Neon Broadcast",
+    description: "High-contrast neon glow with the existing cyber radio mood.",
+  },
+  {
+    id: "mist",
+    name: "Mist Minimal",
+    description: "A calmer layout with soft light, pale glass, and more whitespace.",
+  },
+];
 
 // Each browser session has a stable clientId stored in localStorage.
 // The engine uses it to distinguish "client A stopped playing" from
@@ -204,14 +227,34 @@ export default function Home() {
   //     auto-closes the other so they never appear simultaneously) ===
   const [wallOpen, setWallOpen] = useState(false);
   const [inputOpen, setInputOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [displayTheme, setDisplayTheme] = useState<DisplayThemeId>(() => {
+    if (typeof window === "undefined") return "mist";
+    const savedTheme = window.localStorage.getItem(DISPLAY_THEME_KEY);
+    if (savedTheme === "cyber" || savedTheme === "mist") return savedTheme;
+    return "mist";
+  });
   const toggleWall = useCallback(() => {
     setWallOpen(v => !v);
     setInputOpen(false);
+    setSettingsOpen(false);
   }, []);
   const toggleInput = useCallback(() => {
     setInputOpen(v => !v);
     setWallOpen(false);
+    setSettingsOpen(false);
   }, []);
+  const toggleSettings = useCallback(() => {
+    setSettingsOpen(v => !v);
+    setWallOpen(false);
+    setInputOpen(false);
+  }, []);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.displayTheme = displayTheme;
+    window.localStorage.setItem(DISPLAY_THEME_KEY, displayTheme);
+  }, [displayTheme]);
 
   const ensureAudioReady = useCallback(async () => {
     if (typeof window === "undefined" || !audioRef.current) return false;
@@ -1021,23 +1064,39 @@ export default function Home() {
     <div className="relative z-[2] flex min-h-[100vh] flex-col overflow-hidden">
       <main className="mx-auto flex w-full max-w-[1400px] min-h-0 flex-1 items-center justify-center px-3 py-1.5 sm:px-4 sm:py-2 md:max-w-full md:px-8 md:py-7 lg:max-w-[1600px] lg:px-10 lg:py-9 3xl:px-14 3xl:py-12 landscape-short:py-0.5 landscape-shorter:py-0">
         <div className="flex w-full min-h-0 items-center justify-center">
-          <RadioPlayer
-            theme={theme}
-            isPlaying={isPlaying}
-            connected={connected}
-            volume={volume}
-            bufferStatus={bufferStatus}
-            queueLength={queueLength}
-            prebufferModeLabel={prebufferModeLabel}
-            analyser={analyser}
-            onTogglePlay={togglePlay}
-            onVolumeChange={onVolumeChange}
-          />
+          {displayTheme === "mist" ? (
+            <MinimalRadioPlayer
+              theme={theme}
+              isPlaying={isPlaying}
+              connected={connected}
+              volume={volume}
+              bufferStatus={bufferStatus}
+              queueLength={queueLength}
+              prebufferModeLabel={prebufferModeLabel}
+              analyser={analyser}
+              onTogglePlay={togglePlay}
+              onVolumeChange={onVolumeChange}
+            />
+          ) : (
+            <RadioPlayer
+              theme={theme}
+              isPlaying={isPlaying}
+              connected={connected}
+              volume={volume}
+              bufferStatus={bufferStatus}
+              queueLength={queueLength}
+              prebufferModeLabel={prebufferModeLabel}
+              analyser={analyser}
+              onTogglePlay={togglePlay}
+              onVolumeChange={onVolumeChange}
+            />
+          )}
         </div>
       </main>
 
       {/* Two mutually-exclusive floating action buttons (always visible) */}
       {messageFrontendVisible && (
+      <>
       <div className="fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[max(14px,env(safe-area-inset-bottom,14px))] z-50 flex flex-row items-end gap-2.5 md:right-6 md:bottom-6 md:gap-3 lg:right-8 lg:bottom-8 lg:gap-3.5 max-xs:right-3 max-xs:bottom-3 max-xs:gap-2 landscape-short:right-2.5 landscape-short:bottom-2.5">
         {/* iOS 14.6 (iPhone 7) touch-event fix.
             The outer container has `z-50` but the buttons are static-
@@ -1060,12 +1119,16 @@ export default function Home() {
           aria-pressed={wallOpen}
           style={{ position: "relative", zIndex: 1 }}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-cyan bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
-            wallOpen && "border-neon-cyan bg-[rgba(0,240,255,0.18)] text-bg-deep shadow-[0_0_24px_rgba(0,240,255,0.6)]",
+            displayTheme === "mist"
+              ? "inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-pill border border-[rgba(95,144,197,0.14)] bg-white/84 px-3.5 py-0 text-[11px] font-medium tracking-[0.08em] text-[#5f718b] shadow-[0_12px_30px_rgba(111,136,167,0.16)] transition-all duration-[250ms] ease-out-soft hover:-translate-y-0.5 hover:bg-white"
+              : "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-cyan shadow-[0_0_20px_rgba(0,240,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(0,240,255,0.1)] hover:shadow-[0_0_32px_rgba(0,240,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            displayTheme === "mist"
+              ? wallOpen && "border-[rgba(95,144,197,0.28)] bg-white text-[#213047] shadow-[0_18px_36px_rgba(111,136,167,0.18)]"
+              : wallOpen && "bg-[rgba(0,240,255,0.18)] text-bg-deep shadow-[0_0_24px_rgba(0,240,255,0.6)]",
           )}
         >
           <span aria-hidden className="text-[16px]">{wallOpen ? "✕" : "💬"}</span>
-          <span className="hidden">
+          <span className={displayTheme === "mist" ? "inline" : "hidden"}>
             {wallOpen ? "HIDE" : "VIEW"}
           </span>
         </button>
@@ -1076,25 +1139,93 @@ export default function Home() {
           aria-pressed={inputOpen}
           style={{ position: "relative", zIndex: 1 }}
           className={cn(
-            "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill border-[1.5px] border-neon-magenta bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
-            inputOpen && "bg-[rgba(255,0,170,0.2)] text-bg-deep shadow-[0_0_24px_rgba(255,0,170,0.6)]",
+            displayTheme === "mist"
+              ? "inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-pill border border-[rgba(95,144,197,0.14)] bg-white/84 px-3.5 py-0 text-[11px] font-medium tracking-[0.08em] text-[#5f718b] shadow-[0_12px_30px_rgba(111,136,167,0.16)] transition-all duration-[250ms] ease-out-soft hover:-translate-y-0.5 hover:bg-white"
+              : "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-magenta shadow-[0_0_20px_rgba(255,0,170,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(255,0,170,0.1)] hover:shadow-[0_0_32px_rgba(255,0,170,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            displayTheme === "mist"
+              ? inputOpen && "border-[rgba(95,144,197,0.28)] bg-white text-[#213047] shadow-[0_18px_36px_rgba(111,136,167,0.18)]"
+              : inputOpen && "bg-[rgba(255,0,170,0.2)] text-bg-deep shadow-[0_0_24px_rgba(255,0,170,0.6)]",
           )}
         >
           <span aria-hidden className="text-[16px]">{inputOpen ? "✕" : "✏️"}</span>
-          <span className="hidden">
+          <span className={displayTheme === "mist" ? "inline" : "hidden"}>
             {inputOpen ? "CLOSE" : "SIGNAL"}
           </span>
         </button>
+        <button
+          type="button"
+          onClick={toggleSettings}
+          aria-label={settingsOpen ? "Close theme settings" : "Open theme settings"}
+          aria-pressed={settingsOpen}
+          style={{ position: "relative", zIndex: 1 }}
+          className={cn(
+            displayTheme === "mist"
+              ? "inline-flex min-h-[44px] cursor-pointer items-center justify-center gap-2 rounded-pill border border-[rgba(95,144,197,0.14)] bg-white px-3.5 py-0 text-[11px] font-medium tracking-[0.08em] text-[#213047] shadow-[0_12px_30px_rgba(111,136,167,0.16)] transition-all duration-[250ms] ease-out-soft hover:-translate-y-0.5"
+              : "inline-flex cursor-pointer items-center justify-center gap-0 rounded-pill bg-[rgba(13,13,24,0.75)] px-0 py-0 text-xs font-medium tracking-[0.18em] text-neon-violet shadow-[0_0_20px_rgba(138,43,255,0.3),0_8px_32px_rgba(0,0,0,0.4)] transition-all duration-[250ms] ease-out-soft min-h-[44px] min-w-[44px] w-[44px] h-[44px] hover:-translate-y-0.5 hover:bg-[rgba(138,43,255,0.1)] hover:shadow-[0_0_32px_rgba(138,43,255,0.5),0_12px_40px_rgba(0,0,0,0.5)]",
+            displayTheme === "mist"
+              ? settingsOpen && "border-[rgba(95,144,197,0.28)] shadow-[0_18px_36px_rgba(111,136,167,0.18)]"
+              : settingsOpen && "bg-[rgba(138,43,255,0.2)] text-bg-deep shadow-[0_0_24px_rgba(138,43,255,0.6)]",
+          )}
+        >
+          <span aria-hidden className="text-[16px]">{settingsOpen ? "×" : "◌"}</span>
+          <span className={displayTheme === "mist" ? "inline" : "hidden"}>Theme</span>
+        </button>
       </div>
+      <div
+        className={cn(
+          displayTheme === "mist"
+            ? "fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[calc(max(14px,env(safe-area-inset-bottom,14px))+58px)] z-[55] w-[min(320px,calc(100vw-28px))] rounded-[28px] border border-[rgba(95,144,197,0.14)] bg-[rgba(255,255,255,0.88)] p-4 shadow-[0_26px_70px_rgba(111,136,167,0.18)] backdrop-blur-[24px] transition-all duration-300 ease-out-soft md:right-6 md:bottom-[88px] lg:right-8 lg:bottom-[96px]"
+            : "fixed right-[max(14px,env(safe-area-inset-right,14px))] bottom-[calc(max(14px,env(safe-area-inset-bottom,14px))+58px)] z-[55] w-[min(320px,calc(100vw-28px))] rounded-[24px] border border-white/12 bg-[rgba(10,14,26,0.82)] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.38)] backdrop-blur-[22px] transition-all duration-300 ease-out-soft md:right-6 md:bottom-[88px] lg:right-8 lg:bottom-[96px]",
+          !settingsOpen && "pointer-events-none translate-y-4 opacity-0",
+          settingsOpen && "translate-y-0 opacity-100",
+        )}
+      >
+        <div className="mb-2">
+          <div className={cn("font-display text-sm font-semibold tracking-[0.08em]", displayTheme === "mist" ? "text-[#213047]" : "text-text-primary")}>Display Theme</div>
+          <div className={cn("mt-1 text-xs leading-5", displayTheme === "mist" ? "text-[#5f718b]" : "text-text-secondary")}>Switch the front-end look only. Live content and admin theme stay unchanged.</div>
+        </div>
+        <div className="flex flex-col gap-2">
+          {DISPLAY_THEME_OPTIONS.map((option) => {
+            const active = option.id === displayTheme;
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => setDisplayTheme(option.id)}
+                className={cn(
+                  "w-full rounded-[18px] border px-4 py-3 text-left transition-all duration-200 ease-out-soft",
+                  displayTheme === "mist"
+                    ? active
+                      ? "border-[rgba(95,144,197,0.24)] bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(240,244,249,0.92))] shadow-[0_16px_32px_rgba(111,136,167,0.14)]"
+                      : "border-[rgba(95,144,197,0.1)] bg-white/70 hover:border-[rgba(95,144,197,0.2)] hover:bg-white"
+                    : active
+                      ? "border-neon-cyan/45 bg-[linear-gradient(135deg,rgba(0,240,255,0.18),rgba(255,255,255,0.06))] shadow-[0_0_24px_rgba(0,240,255,0.18)]"
+                      : "border-white/10 bg-white/[0.04] hover:border-white/20 hover:bg-white/[0.08]",
+                )}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <span className={cn("font-display text-sm font-medium tracking-[0.04em]", displayTheme === "mist" ? "text-[#213047]" : "text-text-primary")}>{option.name}</span>
+                  {active && <span className={cn("text-xs font-medium tracking-[0.12em]", displayTheme === "mist" ? "text-[#5f90c5]" : "text-neon-cyan")}>Active</span>}
+                </div>
+                <p className={cn("mt-1 text-xs leading-5", displayTheme === "mist" ? "text-[#5f718b]" : "text-text-secondary")}>{option.description}</p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      </>
       )}
 
-      <footer className="fixed bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-center gap-2.5 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] font-mono text-[9px] tracking-[0.25em] text-text-dim sm:px-5 sm:py-3.5 sm:pb-[calc(14px+env(safe-area-inset-bottom,0px))] sm:text-[10px] md:px-8 md:py-[18px] md:pb-[calc(18px+env(safe-area-inset-bottom,0px))] md:text-[11px] lg:px-9 lg:py-[18px] lg:pb-[calc(18px+env(safe-area-inset-bottom,0px))] 3xl:px-12 3xl:py-5 3xl:pb-[calc(20px+env(safe-area-inset-bottom,0px))] 3xl:text-xs">
-        <span>RADIO AI</span>
         <span className="opacity-40">·</span>
-        <span>live broadcast system</span>
         <span className="opacity-40">·</span>
-        <span>{new Date().getFullYear()}</span>
-      </footer>
+
+      {displayTheme === "cyber" && (
+        <footer className="fixed bottom-0 left-0 right-0 z-10 flex flex-wrap items-center justify-center gap-2.5 px-4 py-3 pb-[calc(12px+env(safe-area-inset-bottom,0px))] font-mono text-[9px] tracking-[0.25em] text-text-dim sm:px-5 sm:py-3.5 sm:pb-[calc(14px+env(safe-area-inset-bottom,0px))] sm:text-[10px] md:px-8 md:py-[18px] md:pb-[calc(18px+env(safe-area-inset-bottom,0px))] md:text-[11px] lg:px-9 lg:py-[18px] lg:pb-[calc(18px+env(safe-area-inset-bottom,0px))] 3xl:px-12 3xl:py-5 3xl:pb-[calc(20px+env(safe-area-inset-bottom,0px))] 3xl:text-xs">
+          <span>RADIO AI</span>
+          <span>live broadcast system</span>
+          <span>{new Date().getFullYear()}</span>
+        </footer>
+      )}
 
       {/* Hidden audio element (used by both Web Audio analyser and HTMLAudio)
        *
@@ -1124,6 +1255,7 @@ export default function Home() {
         onToggle={toggleWall}
         messages={wallMessages}
         speedSeconds={scrollSpeedSeconds}
+        variant={displayTheme}
       />
       )}
 
@@ -1134,6 +1266,7 @@ export default function Home() {
         onToggle={toggleInput}
         onSubmit={submitMessage}
         submissionStatus={submissionStatus}
+        variant={displayTheme}
       />
       )}
 
