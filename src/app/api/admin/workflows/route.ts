@@ -14,7 +14,7 @@ export async function GET() {
 // ref-audio route. refAudioPath is intentionally NOT in this list —
 // the only safe way to set it is via the dedicated upload endpoint,
 // which performs its own path-containment check before writing.
-const POST_FIELDS = ["name", "workflowJson", "inputParams", "refText", "speed"] as const;
+const POST_FIELDS = ["name", "workflowJson", "inputParams", "refText", "instruct", "speed"] as const;
 
 export async function POST(req: NextRequest) {
   let body: unknown;

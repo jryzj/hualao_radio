@@ -36,12 +36,16 @@ if (globalState.newsCache === undefined) {
 }
 
 class NewsService {
-  // A-path: pick 3 random RSS items fresh on every call so each LLM
-  // segment gets a different set from the previous one.
-  async getCurrentNews(): Promise<string> {
+  // A-path: when a `query` is provided (e.g. the active theme's
+  // description), FTS5-search the RSS pool first and top up with
+  // Tavily if the local hits fall short of `maxNewsItems`. When
+  // `query` is empty, fall back to the original random-sample
+  // behavior so a topic-less theme isn't restricted to any subject.
+  async getCurrentNews(query?: string): Promise<string> {
     const cfg = await getNewsConfig();
-    const items = await pickRandomItems(cfg);
+    const items = await pickItemsForQuery(query, cfg);
     if (items.length === 0) {
+      console.log(`[NewsService] A-path: 0 items (query=${JSON.stringify(query ?? "")})`);
       return "";
     }
     const context = formatNewsContext(items, {
@@ -50,7 +54,7 @@ class NewsService {
       maxTotalChars: cfg.maxTotalChars,
     });
     console.log(
-      `[NewsService] A-path: ${items.length} random items picked, ${context.length} chars`,
+      `[NewsService] A-path: ${items.length} items, ${context.length} chars (query=${JSON.stringify(query ?? "")})`,
     );
     return context;
   }
@@ -258,7 +262,72 @@ function resultsToInputs(results: Array<FtsResult | (TavilyResult & { sourceTitl
   });
 }
 
-async function pickRandomItems(cfg: Cfg): Promise<NewsItemInput[]> {
+// A-path orchestrator: FTS5 over the local RSS pool, top up with
+// Tavily if the local hits are short, top up with random RSS
+// (excluding already-picked links) if FTS5+Tavily combined are
+// still short, fall back to a random sample when no query is
+// provided (theme.description empty / unset).
+async function pickItemsForQuery(
+  query: string | undefined,
+  cfg: Cfg,
+): Promise<NewsItemInput[]> {
+  // 主题描述为空 → 维持现有"随机 3 条"行为（不限制主题）
+  if (!query || !query.trim()) {
+    return pickRandomItems(cfg);
+  }
+
+  // 1) FTS5 查 RSS 库
+  const ftsResults = await searchRssItems({
+    query,
+    activeWindowMs: cfg.activeWindowMs,
+    limit: cfg.maxNewsItems,
+  });
+  const ftsItems = resultsToInputs(ftsResults);
+
+  // 2) 数量足够 → 不调 Tavily 也不调随机
+  if (ftsItems.length >= cfg.maxNewsItems) {
+    console.log(`[NewsService] A-path FTS5-only: ${ftsItems.length} items (query=${JSON.stringify(query)})`);
+    return ftsItems;
+  }
+
+  // 3) 不足 → Tavily 补差（如果配了 key）
+  let tavilyItems: NewsItemInput[] = [];
+  if (cfg.tavilyApiKey) {
+    const need = cfg.maxNewsItems - ftsItems.length;
+    try {
+      const tavilyResults = await tavilySearch({
+        apiKey: cfg.tavilyApiKey,
+        query,
+        timeRange: cfg.tavilyTimeRange,
+        maxResults: need,
+      });
+      tavilyItems = resultsToInputs(
+        tavilyResults.map((r) => ({ ...r, sourceTitle: "Tavily" })),
+      );
+    } catch (err) {
+      // Tavily 失败/超配额：忽略这一路，下一步用随机补
+      console.error("[NewsService] Tavily top-up failed:", err);
+    }
+  }
+
+  // 4) 合并 FTS5 + Tavily，看是否还差
+  const combined = [...ftsItems, ...tavilyItems];
+  if (combined.length >= cfg.maxNewsItems) {
+    console.log(`[NewsService] A-path FTS5+Tavily: ${ftsItems.length} fts + ${tavilyItems.length} tavily (query=${JSON.stringify(query)})`);
+    return combined;
+  }
+
+  // 5) 还差 → 用随机补（排除已选中的 link，避免重复）
+  const excludeLinks = new Set(combined.map((i) => i.link).filter((l): l is string => typeof l === "string" && l.length > 0));
+  const randomItems = await pickRandomItems(cfg, excludeLinks);
+  const needed = cfg.maxNewsItems - combined.length;
+  const randomTopUp = randomItems.slice(0, needed);
+  const final = [...combined, ...randomTopUp];
+  console.log(`[NewsService] A-path FTS5+Tavily+random: ${ftsItems.length} fts + ${tavilyItems.length} tavily + ${randomTopUp.length} random (query=${JSON.stringify(query)})`);
+  return final;
+}
+
+async function pickRandomItems(cfg: Cfg, excludeLinks: Set<string> = new Set()): Promise<NewsItemInput[]> {
   const cutoff = new Date(Date.now() - cfg.activeWindowMs);
   // Pool size is now operator-controlled via `newsPoolSize` (default 100).
   // We still floor it at `maxNewsItems` so the operator can never set a
@@ -270,6 +339,7 @@ async function pickRandomItems(cfg: Cfg): Promise<NewsItemInput[]> {
     where: {
       publishedAt: { gt: cutoff, not: null },
       source: { status: "active" },
+      ...(excludeLinks.size > 0 ? { link: { notIn: [...excludeLinks] } } : {}),
     },
     orderBy: [{ publishedAt: "desc" }, { fetchedAt: "desc" }],
     take: poolSize,

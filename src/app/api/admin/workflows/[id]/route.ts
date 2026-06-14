@@ -6,7 +6,7 @@ import { prisma, withBusyRetry } from "@/lib/prisma";
 // a future XSS) overwrite `refAudioPath` and escape the
 // `public/uploads/ref-audio/<id>/` containment used by the
 // ref-audio route.
-const ALLOWED_FIELDS = ["name", "workflowJson", "inputParams", "refText", "speed"] as const;
+const ALLOWED_FIELDS = ["name", "workflowJson", "inputParams", "refText", "instruct", "speed"] as const;
 type AllowedField = (typeof ALLOWED_FIELDS)[number];
 
 type Editable = {
@@ -14,6 +14,7 @@ type Editable = {
   workflowJson?: string;
   inputParams?: string;
   refText?: string;
+  instruct?: string;
   speed?: number;
 };
 

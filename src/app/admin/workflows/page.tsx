@@ -8,6 +8,7 @@ interface Workflow {
   inputParams: string;
   refAudioPath: string | null;
   refText: string | null;
+  instruct: string;
   speed: number;
 }
 
@@ -17,21 +18,23 @@ interface CreateForm {
   inputParams: string;
   speed: string;
   refText: string;
+  instruct: string;
   refAudioFile: File | null;
 }
 
 export default function WorkflowsPage() {
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [form, setForm] = useState<CreateForm>({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", refAudioFile: null });
+  const [form, setForm] = useState<CreateForm>({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", instruct: "", refAudioFile: null });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [refTextEdits, setRefTextEdits] = useState<Record<string, string>>({});
+  const [instructEdits, setInstructEdits] = useState<Record<string, string>>({});
 
   useEffect(() => { reload(); }, []);
   async function reload() { setWorkflows(await (await fetch("/api/admin/workflows")).json()); }
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    const { refAudioFile, refText, workflowJson, inputParams, speed, name } = form;
+    const { refAudioFile, refText, instruct, workflowJson, inputParams, speed, name } = form;
     // Step 1: JSON 创建工作流
     const res = await fetch("/api/admin/workflows", {
       method: "POST",
@@ -42,6 +45,7 @@ export default function WorkflowsPage() {
         inputParams: inputParams.split(",").map(s => s.trim()),
         speed: parseFloat(speed),
         refText: refText || null,
+        instruct,
       }),
     });
     if (!res.ok) {
@@ -62,7 +66,7 @@ export default function WorkflowsPage() {
         alert(`工作流已创建，但参考音频上传失败: ${err.error ?? upRes.status}`);
       }
     }
-    setForm({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", refAudioFile: null });
+    setForm({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", instruct: "", refAudioFile: null });
     reload();
   }
 
@@ -114,7 +118,22 @@ export default function WorkflowsPage() {
     reload();
   }
 
+  async function saveInstruct(workflowId: string, newVal: string, currentVal: string) {
+    if (newVal === currentVal) return;
+    const res = await fetch(`/api/admin/workflows/${workflowId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instruct: newVal }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`instruct 保存失败: ${err.error ?? res.status}`);
+    }
+    reload();
+  }
+
   const getEditVal = (id: string, refText: string | null) => refTextEdits[id] ?? refText ?? "";
+  const getInstructEditVal = (id: string, instruct: string) => instructEdits[id] ?? instruct ?? "";
 
   const s = {
     page: { padding: "24px", maxWidth: 900 },
@@ -131,6 +150,7 @@ export default function WorkflowsPage() {
     audioRow: { display: "flex", gap: 12, alignItems: "center", marginTop: 8, flexWrap: "wrap" as const },
     fileInput: { fontSize: 12, color: "#9a958c" },
     refTextRow: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" as const },
+    instructRow: { display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" as const },
     saveBtn: { padding: "6px 12px", background: "linear-gradient(145deg, #e8a84c, #c77b4a)", border: "none", borderRadius: 4, color: "#0a0a0c", fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 500, letterSpacing: 1, cursor: "pointer" },
     saveBtnDisabled: { padding: "6px 12px", background: "#2a2a32", border: "1px solid #1a1a22", borderRadius: 4, color: "#5a5850", fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 500, letterSpacing: 1, cursor: "not-allowed" },
   };
@@ -161,6 +181,15 @@ export default function WorkflowsPage() {
           />
         </label>
         <label style={s.label}>
+          instruct（克隆工作流节点 35 语音指令）
+          <input
+            placeholder="如：东北话 / 粤语 / 温柔女声"
+            value={form.instruct}
+            onChange={e => setForm({ ...form, instruct: e.target.value })}
+            style={s.input}
+          />
+        </label>
+        <label style={s.label}>
           参考音频（可选）
           <input
             type="file"
@@ -179,11 +208,12 @@ export default function WorkflowsPage() {
             <div style={s.itemMeta}>
               <span>speed: <strong style={{ color: "#9a958c" }}>{w.speed}</strong></span>
               {w.inputParams && <span>params: {w.inputParams}</span>}
+              <span>instruct: <strong style={{ color: w.instruct ? "#9a958c" : "#3a3a40" }}>{w.instruct || "（未设置）"}</strong></span>
             </div>
             <div style={s.audioRow}>
               {w.refAudioPath ? (
                 <>
-                  <audio controls src={`/${w.refAudioPath}`} style={{ height: 32 }} />
+                  <audio controls src={`/${w.refAudioPath}`} style={{ height: 40 }} />
                   <label style={s.fileInput}>
                     {uploadingId === w.id ? "上传中..." : "替换参考音频:"}
                     <input
@@ -231,6 +261,21 @@ export default function WorkflowsPage() {
                 onClick={() => saveRefText(w.id, getEditVal(w.id, w.refText), w.refText)}
                 disabled={getEditVal(w.id, w.refText) === (w.refText ?? "")}
                 style={getEditVal(w.id, w.refText) === (w.refText ?? "") ? s.saveBtnDisabled : s.saveBtn}
+              >保存</button>
+            </div>
+            <div style={s.instructRow}>
+              <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>instruct:</span>
+              <input
+                value={getInstructEditVal(w.id, w.instruct)}
+                onChange={e => setInstructEdits({ ...instructEdits, [w.id]: e.target.value })}
+                onBlur={e => saveInstruct(w.id, e.target.value, w.instruct)}
+                placeholder="（未设置）"
+                style={{ ...s.input, flex: 1, minWidth: 240 }}
+              />
+              <button
+                onClick={() => saveInstruct(w.id, getInstructEditVal(w.id, w.instruct), w.instruct)}
+                disabled={getInstructEditVal(w.id, w.instruct) === (w.instruct ?? "")}
+                style={getInstructEditVal(w.id, w.instruct) === (w.instruct ?? "") ? s.saveBtnDisabled : s.saveBtn}
               >保存</button>
             </div>
           </li>
