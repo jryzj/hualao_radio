@@ -163,10 +163,10 @@ npm run ws-server
 1. 进入 `/admin` → 修改默认密码
 2. **LLM 配置**：填 API URL、Key、模型名
 3. **ComfyUI 配置**：填服务端 URL、Token、Webhook URL
-4. **人物**：创建至少一个 Persona
-5. **工作流**：上传 ComfyUI 导出的 API 格式 JSON（仓库已带 `workflows/my_omnivoice-tts_api.json` 和 `_clone_api.json` 两个示例）
-6. **主题**：把 Persona + Workflow 绑成一个 Theme，激活它
-7. **新闻**（可选）：加 RSS 源、配 Tavily Key
+4. **人物 (Persona)**：创建至少一个 Persona，**personality 字段**写"人设性格/描述"（如"东北话幽默男主持"）——这是直播时段落 LLM 的风格来源
+5. **工作流 (Workflow)**：上传 ComfyUI 导出的 API 格式 JSON（仓库已带 `workflows/my_omnivoice-tts_api.json` 和 `_clone_api.json` 两个示例）。**如果是克隆工作流**（_clone_api），在新建后单独编辑 **instruct 字段**（"节点 35 语音指令"，如"东北话"/"粤语"/"温柔女声"），再上传 ref_audio 即可启动声音克隆
+6. **主题 (Theme)**：把 Persona + Workflow 绑成一个 Theme，激活它
+7. **新闻**（可选）：加 RSS 源、配 Tavily Key。**A 路径**会用 `theme.description` 当 FTS5 查询词 + Tavily top-up 来选新闻；描述越具体，相关性越高
 8. **音频缓冲**：调 `prebufferSentences` / `prebufferSeconds`，改完立即生效
 
 ---
@@ -277,9 +277,9 @@ your.domain, ws.your.domain {
         reverse_proxy 127.0.0.1:8080
     }
 
-    # /uploads/* 直接交给 Next（运行时写入，必须走 App Router 路由，
+    # /api/uploads/* 直接交给 Next（运行时写入，必须走 App Router 路由，
     # 不能让 public/ 静态服务，因为它在构建时被快照，不感知运行时新增）
-    handle /uploads/* {
+    handle /api/uploads/* {
         reverse_proxy 127.0.0.1:3000
     }
 
@@ -297,7 +297,7 @@ your.domain, ws.your.domain {
 **关键点**：
 
 1. **`/messages` 和 `/audio` 单独 handle**，直转 `127.0.0.1:8080`，**不要**让 Next.js 升级 HTTP 请求到 WS（Next 自带 WS 会被代理劫持）
-2. **`/uploads/*` 必须经 Next.js**：Next 构建时把 `public/` 快照成静态资产，运行时上传的文件（参考音频等）需要走 `src/app/uploads/[[...path]]/route.ts`
+2. **`/api/uploads/*` 必须经 Next.js**：Next 构建时把 `public/` 快照成静态资产，运行时上传的文件（参考音频等）需要走 `src/app/api/uploads/[[...path]]/route.ts`。**注意** URL 路径是 `/api/uploads/...`（带 `/api` 前缀），不是 `/uploads/...`——这是为了避开 Next.js 14+ 路由优先级问题（catch-all 路由在 prod 不与 `public/` 段重叠）
 3. **不要让 8081 暴露在反代后**——它是 loopback-only 的内部 HTTP API
 4. 如果浏览器在 HTTPS 下，WebSocket 会自动升级到 `wss://`，浏览器端不需要改代码（`ws-url.ts` 会按 `window.location.protocol` 自动选 scheme）
 
@@ -338,7 +338,7 @@ server {
         proxy_read_timeout 86400;
     }
 
-    location /uploads/ {
+    location /api/uploads/ {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
     }
@@ -365,7 +365,7 @@ server {
 - [ ] 点进入后能看到波形 / 听到测试音频
 - [ ] 浏览器 console 没有 `WebSocket` / `CSP` 报错
 - [ ] `/admin/login` 能用 `ADMIN_PASSWORD` 登录
-- [ ] 上传一首参考音频后，`/uploads/...` 路径能直接播放（不走 Next 静态资源）
+- [ ] 上传一首参考音频后，`/api/uploads/...` 路径能直接播放（不走 Next 静态资源；URL 前缀带 `/api` 是为了避开 Next.js 14+ catch-all 路由优先级问题）
 - [ ] 锁屏后音频继续（iOS 需先"添加到主屏幕"成为 PWA）
 - [ ] 长时间播放屏幕不熄（Wake Lock 生效）
 
@@ -375,10 +375,10 @@ server {
 
 | 板块                  | 功能                                                  |
 | ------------------- | --------------------------------------------------- |
-| **主题 (Themes)**     | 配 Persona × Workflow，激活/停用，**全局唯一激活**               |
-| **人物 (Personas)**   | 主播人设：名字 + 系统提示词                                     |
-| **工作流 (Workflows)** | ComfyUI TTS 工作流 JSON + 参考音频 + 参考文本（声音克隆）            |
-| **新闻 (News)**       | RSS 源管理、自动抓取计划、Tavily 实时联网                          |
+| **主题 (Themes)**     | 配 Persona × Workflow，激活/停用，**全局唯一激活**。`description` 字段驱动 A 路径新闻选取（见 §新闻） |
+| **人物 (Personas)**   | 主播人设：名字 + `personality` 字段（性格/风格描述，是 LLM 段落的人设来源） |
+| **工作流 (Workflows)** | ComfyUI TTS 工作流 JSON + 参考音频 + 参考文本 + **`instruct` 字段**（克隆工作流节点 35 的语音指令，如"东北话"/"粤语"/"温柔女声"） |
+| **新闻 (News)**       | RSS 源管理、自动抓取计划、Tavily 实时联网、**每主题内容缓冲**（见 §新闻） |
 | **留言管理 (Messages)** | 听众留言 AI 审核（pending/approved/rejected）、人工通过/拒绝/隐藏/删除 |
 | **音频缓冲 (Buffer)**   | 调预缓冲句数 / 秒数 / 模式 / 分组大小                             |
 | **LLM 配置**          | API URL、Key、模型名（持久化到 DB）                            |
@@ -401,7 +401,64 @@ server {
 
 ---
 
-## 十一、项目结构
+## 十一、新闻系统（每主题缓冲 + 跨段落消费）
+
+> 这块是直播"内容来源"，独立于听众端 UI、属于**服务端**逻辑。
+
+### 11.1 三条路径
+
+直播 A 路径（无 pending listener messages）下，从 RSS + Tavily 拉新闻按"主题描述"过滤后喂给 LLM：
+
+| 路径          | 何时走                            | 行为                                                                                       |
+| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
+| **A 路径**    | 无听众留言时（**默认**）                | 用 `theme.description` 当 FTS5 查询词 → Tavily top-up → 仍不足用随机补足（去重已选 link），全部塞进**每主题缓冲** |
+| **C 路径**    | 有听众留言时                          | 把留言当 query 走 FTS5 + Tavily（不经过缓冲），与听众消息强相关                                              |
+| **随机 fallback** | 描述为空 / FTS5+Tavily 都 0 命中         | 直接随机 RSS 池（仍然不重复已选 link）                                                          |
+
+### 11.2 每主题内容缓冲
+
+每个活跃主题在 `globalThis` 里有一个 `NewsBuffer`：
+
+- **填充时机**：缓冲 `cursor >= items.length`（耗尽）时触发 `fillBuffer`
+- **填充内容**（`fillBuffer(themeId, description, cfg)`）：
+  1. FTS5 查 RSS 库（用 `theme.description` 当查询词）
+  2. 不足 → Tavily top-up（用同一个查询词）
+  3. 仍不足 → 随机 RSS 池补差（`notIn` SQL 排除已选 link）
+- **消费**：每次 LLM 调用从 `buffer[cursor..cursor+K]` 取 K 条（K = `maxNewsItems`），cursor 推进 K
+- **缓冲大小**：`NewsConfig.newsBufferSize`（默认 **100**）
+
+**关键不变量**：100 条缓冲的 33 次连续 LLM 调用都拿到**不同**的 K=3 条新闻；第 34 次触发重建。
+
+### 11.3 配置项（`NewsConfig` 表）
+
+| 字段 | 默认 | 含义 |
+| --- | --- | --- |
+| `newsPoolSize` | 100 | 随机补差时从 RSS 池捞的"候选池"大小 |
+| `newsBufferSize` | 100 | 每主题内容缓冲总条数（`fillBuffer` 上限） |
+| `maxNewsItems` | 3 | 每次 LLM 调用取几条（= `{{news}}` 渲染条数） |
+| `activeWindowMs` | 24h | RSS 条目"新"的判定窗口（超过这个时间不入选） |
+| `tavilyApiKey` | — | Tavily 联网搜索 key（空则跳过 Tavily 阶段） |
+| `tavilyTimeRange` | `d` | Tavily 时间范围（`d`/`w`/`m`/`y`） |
+| `maxItemChars` / `maxTotalChars` | 2000 / 5000 | 渲染 `{{news}}` 的截断上限 |
+
+所有配置项都在 `/admin/news` 可视化改、**热生效**。
+
+### 11.4 占位符（在主题 prompt 里写）
+
+`buildConversationMessages` 支持的占位符：
+
+| 占位符 | 替换为 |
+| --- | --- |
+| `{{name}}` | persona.name |
+| `{{personality}}` | persona.personality（**注意**：历史版本叫 `{{prompt}}`，已重命名以避免与 LLM "prompt" 概念混淆） |
+| `{{theme.name}}` / `{{theme.description}}` | 当前主题的名字 / 描述 |
+| `{{listenerMessages}}` | 听众留言内容（" \| " 拼接） |
+| `{{listenerAuthors}}` | 听众作者名（"、 " 拼接） |
+| `{{news}}` | 缓冲中取出的 K 条新闻（按 `formatNewsContext` 渲染） |
+
+---
+
+## 十二、项目结构
 
 ```
 radioai/
@@ -419,8 +476,8 @@ radioai/
 │   │   │   ├── live/           # 直播引擎控制
 │   │   │   ├── messages/       # 听众留言提交
 │   │   │   ├── tts/            # TTS 触发
+│   │   │   ├── uploads/[[...path]]/route.ts   # 运行时上传文件的 HTTP 路由（关键！URL /api/uploads/*）
 │   │   │   └── health/         # 健康检查
-│   │   ├── uploads/[[...path]]/route.ts   # 运行时上传文件的 HTTP 路由（关键！）
 │   │   └── listen/             # 备用入口
 │   ├── components/             # 7 个手写组件
 │   │   ├── AudioVisualizer.tsx
@@ -429,17 +486,20 @@ radioai/
 │   │   ├── MessageInputDrawer.tsx
 │   │   ├── MessageWall.tsx
 │   │   ├── MessageWallPanel.tsx
+│   │   ├── MinimalRadioPlayer.tsx
 │   │   └── RadioPlayer.tsx
 │   ├── config/                 # 单行 DB 配置读取器
 │   ├── generated/              # Prisma 客户端输出（gitignored）
+│   ├── hooks/                  # React hooks（useRecordVisit 等）
 │   ├── lib/
 │   │   ├── admin-auth.ts       # 服务端鉴权
 │   │   ├── admin-cookie.ts     # HMAC 签名 / 验签
+│   │   ├── cn.ts               # className 合并小工具
 │   │   ├── comfyui/            # ComfyUI 工作流提交 + 轮询
-│   │   ├── live-engine/        # LLM → TTS → 广播的编排器
+│   │   ├── live-engine/        # LLM → TTS → 广播的编排器（含每主题新闻缓冲）
 │   │   ├── llm/                # OpenAI 兼容 chat 客户端
 │   │   ├── moderation/         # LLM 留言审核
-│   │   ├── news/               # RSS + Tavily
+│   │   ├── news/               # RSS + Tavily + 每主题内容缓冲
 │   │   ├── prisma/             # Prisma client 实例
 │   │   ├── rate-limit.ts       # 简单限流
 │   │   ├── upload-path.ts      # 上传路径安全校验
@@ -479,7 +539,7 @@ radioai/
 
 ---
 
-## 十二、常见问题
+## 十三、常见问题
 
 <details>
 <summary><b>Q：浏览器一直报 <code>WebSocket connection to wss://...:8080/messages failed</code></b></summary>
@@ -492,11 +552,18 @@ radioai/
   </details>
 
 <details>
-<summary><b>Q：上传了参考音频但 <code>GET /uploads/.../xxx.flac 404</code></b></summary>
+<summary><b>Q：上传了参考音频但 <code>GET /api/uploads/.../xxx.flac 404</code></b></summary>
 
-这是 Next.js 把 `public/` 在**构建时**快照成静态资产导致的——运行时上传的文件不会被静态服务捕获。
+本项目把动态路由放在 **`src/app/api/uploads/[[...path]]/route.ts`**（URL 是 `/api/uploads/...`，**不是** `/uploads/...`），原因：
 
-解决：本项目已经在 `src/app/uploads/[[...path]]/route.ts` 加了 App Router 路由兜底。**确认反代把 `/uploads/*` 转给 Next.js**（不能直接走静态服务），参考 §8.3 的 Caddy 片段。
+- Next.js 16 production built-in static handler 在 `/uploads/...` 段**优先于** `[[...path]]` catch-all 动态路由，直接返 404
+- 把路由挪到 `/api/uploads/` 段下，与 `public/` 物理隔离，static handler 不会抢
+- URL 看起来双 `uploads/`（`/api/uploads/uploads/ref-audio/...`），但 DB 存的 `Workflow.refAudioPath` 路径不变，无需数据迁移
+
+确认：
+- 反代 Caddy/Nginx 把 `/api/uploads/*` 转给 Next.js（**不是** `/uploads/*`），参考 §8.3
+- 上传后**重新 build 并重启**（`npm run build && pm2 restart`）。只在 dev 模式跑 `/admin/workflows` 不会复现
+- 文件实际写在 `/public/uploads/ref-audio/<id>/<file>`（`PUBLIC_ROOT = path.resolve(process.cwd(), 'public')`，prod 容器里 cwd 通常是 `/`）
 
 </details>
 
@@ -553,7 +620,7 @@ npx vitest    # 另一套配置（按文件名匹配）
 
 ---
 
-## 十三、安全须知
+## 十四、安全须知
 
 > 部署前请完整过一遍。
 
@@ -563,18 +630,18 @@ npx vitest    # 另一套配置（按文件名匹配）
 4. **反代必须强制 HTTPS**——明文 WS 在公网等于裸奔，token 可被嗅探。
 5. **生产不开 Next.js dev 模式**（`next dev`）——它会带 `'unsafe-eval'` CSP 豁免。
 6. **数据库备份**：`dev.db` 是个普通文件，cron `cp dev.db backup/dev-$(date +%F).db` 即可。
-7. **`/uploads/` 权限**：不要把敏感文件放进去；当前实现按扩展名设 MIME，但没有执行权限（只是静态读取）。
+7. **`/api/uploads/` 权限**：不要把敏感文件放进去；当前实现按扩展名设 MIME，但没有执行权限（只是 fs 读盘 + 直接送回字节流）。所有请求经 `resolveUnderPublic()` 严格校验 `public/` 路径前缀防止 `../` 穿越。
 8. **CSP 报告**：`script-src` 含 `'unsafe-inline'` 是已知技术债（`next.config.ts` 注释 M4），待 Next.js nonce API 稳定后改。
 
 ---
 
-## 十四、贡献与开发约定
+## 十五、贡献与开发约定
 
 - 
 - **不引入**新依赖请先讨论——整套栈刻意保持极简
 - **PR 前跑** `npm run lint`（项目没用 Prettier，依赖 ESLint `--fix`）
 - **数据库 schema 改动**必须配套生成 migration：`npx prisma migrate dev --name <name>`
 
-## 十五、License
+## 十六、License
 
 MIT
