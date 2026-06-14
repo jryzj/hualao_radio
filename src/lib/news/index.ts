@@ -23,23 +23,9 @@ interface NewsCache {
   source: "A" | "C" | null;
 }
 
-// Per-theme content buffer for the A-path. Each theme gets one
-// buffer that holds up to `NewsConfig.newsBufferSize` items; LLM
-// segments consume items sequentially via `cursor`. When exhausted,
-// the buffer is refilled from FTS5 + random RSS. This avoids
-// re-querying and re-sampling for every segment within the same
-// theme, and guarantees that consecutive segments don't repeat
-// items until the buffer is fully consumed.
-interface NewsBuffer {
-  items: NewsItemInput[];
-  cursor: number;
-  filledAt: number;
-}
-
 const globalState = globalThis as unknown as {
   newsServiceStarted: boolean;
   newsCache: NewsCache;
-  newsBuffer: Map<string, NewsBuffer>;
   rssRefreshTimer?: NodeJS.Timeout;
   pruneTimer?: NodeJS.Timeout;
 };
@@ -48,41 +34,23 @@ if (globalState.newsServiceStarted === undefined) globalState.newsServiceStarted
 if (globalState.newsCache === undefined) {
   globalState.newsCache = { context: "", updatedAt: 0, source: null };
 }
-if (globalState.newsBuffer === undefined) {
-  globalState.newsBuffer = new Map();
-}
 
 class NewsService {
-  // A-path: per-theme content buffer. Each theme gets one buffer
-  // holding up to `cfg.newsBufferSize` items (default 100). The
-  // LLM consumes `cfg.maxNewsItems` items per segment, advancing
-  // the cursor; when exhausted, the buffer is refilled via
-  // `fillBuffer` (FTS5 + random RSS).
-  //
-  // `description` is the active theme's `description` field, used as
-  // the FTS5 query when filling. Empty description -> pure random.
-  async getCurrentNews(themeId: string, description: string): Promise<string> {
+  // A-path: pick 3 random RSS items fresh on every call so each LLM
+  // segment gets a different set from the previous one.
+  async getCurrentNews(): Promise<string> {
     const cfg = await getNewsConfig();
-    const k = cfg.maxNewsItems;
-
-    let buf = globalState.newsBuffer.get(themeId);
-    if (!buf || buf.cursor >= buf.items.length) {
-      buf = await fillBuffer(themeId, description, cfg);
-      globalState.newsBuffer.set(themeId, buf);
-    }
-
-    const taken = takeFromBuffer(buf, k);
-    if (taken.length === 0) {
-      console.log(`[NewsService] A-path: 0 items (themeId=${themeId})`);
+    const items = await pickRandomItems(cfg);
+    if (items.length === 0) {
       return "";
     }
-    const context = formatNewsContext(taken, {
-      maxItems: k,
+    const context = formatNewsContext(items, {
+      maxItems: cfg.maxNewsItems,
       maxItemChars: cfg.maxItemChars,
       maxTotalChars: cfg.maxTotalChars,
     });
     console.log(
-      `[NewsService] A-path: ${taken.length} items, ${context.length} chars (themeId=${themeId}, cursor=${buf.cursor}/${buf.items.length})`,
+      `[NewsService] A-path: ${items.length} random items picked, ${context.length} chars`,
     );
     return context;
   }
@@ -291,27 +259,14 @@ function resultsToInputs(results: Array<FtsResult | (TavilyResult & { sourceTitl
   });
 }
 
-// A-path orchestrator: FTS5 over the local RSS pool, top up with
-// Tavily if the local hits are short, top up with random RSS
-// (excluding already-picked links) if FTS5+Tavily combined are
-// still short, fall back to a random sample when no query is
-// provided (theme.description empty / unset).
-async function pickRandomItems(cfg: Cfg, excludeLinks: Set<string> = new Set(), count?: number): Promise<NewsItemInput[]> {
+async function pickRandomItems(cfg: Cfg): Promise<NewsItemInput[]> {
   const cutoff = new Date(Date.now() - cfg.activeWindowMs);
-  // Pool size is now operator-controlled via `newsPoolSize` (default 100).
-  // We still floor it at `maxNewsItems` so the operator can never set a
-  // pool smaller than the pick count, which would otherwise silently
-  // shrink the rendered {{news}} list.
-  const poolSize = Math.max(cfg.newsPoolSize, cfg.maxNewsItems);
-  // Pick count defaults to `maxNewsItems` for legacy callers; the
-  // buffer-fill path passes an explicit count (default 100).
-  const pickCount = count ?? cfg.maxNewsItems;
+  const poolSize = Math.max(cfg.maxNewsItems * 10, 30);
 
   const candidates = await prisma.rssItem.findMany({
     where: {
       publishedAt: { gt: cutoff, not: null },
       source: { status: "active" },
-      ...(excludeLinks.size > 0 ? { link: { notIn: [...excludeLinks] } } : {}),
     },
     orderBy: [{ publishedAt: "desc" }, { fetchedAt: "desc" }],
     take: poolSize,
@@ -322,7 +277,7 @@ async function pickRandomItems(cfg: Cfg, excludeLinks: Set<string> = new Set(), 
     return [];
   }
 
-  const picked = shuffle(candidates).slice(0, pickCount);
+  const picked = shuffle(candidates).slice(0, cfg.maxNewsItems);
   return picked.map((c) => ({
     title: c.title,
     contentMd: c.contentMd,
@@ -331,96 +286,6 @@ async function pickRandomItems(cfg: Cfg, excludeLinks: Set<string> = new Set(), 
     publishedAt: c.publishedAt,
     fetchedAt: c.fetchedAt,
   }));
-}
-
-// Fill (or refill) the per-theme content buffer.
-// Strategy: FTS5 over the RSS pool with the theme's description as
-// the query (when non-empty), top up with Tavily (when configured)
-// if FTS5 falls short, then random RSS items (excluding already-
-// picked links) for any remaining gap. Order in the buffer: FTS5
-// hits first, then Tavily, then random — all source-relevant to
-// the description until the random tail.
-async function fillBuffer(
-  themeId: string,
-  description: string,
-  cfg: Cfg,
-): Promise<NewsBuffer> {
-  const want = Math.max(cfg.newsBufferSize, 1);
-  const desc = description?.trim() ?? "";
-
-  // 1) FTS5（描述非空时）
-  let ftsItems: NewsItemInput[] = [];
-  if (desc) {
-    try {
-      const ftsResults = await searchRssItems({
-        query: desc,
-        activeWindowMs: cfg.activeWindowMs,
-        limit: want,
-      });
-      ftsItems = resultsToInputs(ftsResults);
-    } catch (err) {
-      console.error("[NewsService] fillBuffer FTS5 failed:", err);
-    }
-  }
-
-  if (ftsItems.length >= want) {
-    const items = shuffle(ftsItems);
-    console.log(`[NewsService] buffer filled: ${items.length} items (themeId=${themeId}, FTS5-only)`);
-    return { items, cursor: 0, filledAt: Date.now() };
-  }
-
-  // 2) Tavily 补差（如果配了 key）
-  let tavilyItems: NewsItemInput[] = [];
-  if (cfg.tavilyApiKey) {
-    const need = want - ftsItems.length;
-    try {
-      const tavilyResults = await tavilySearch({
-        apiKey: cfg.tavilyApiKey,
-        query: desc,
-        timeRange: cfg.tavilyTimeRange,
-        maxResults: need,
-      });
-      tavilyItems = resultsToInputs(
-        tavilyResults.map((r) => ({ ...r, sourceTitle: "Tavily" })),
-      );
-    } catch (err) {
-      // Tavily 失败/超配额：忽略，下一步走随机补差
-      console.error("[NewsService] fillBuffer Tavily top-up failed:", err);
-    }
-  }
-
-  // 3) 合并 FTS5 + Tavily，看是否还差
-  const combined = [...ftsItems, ...tavilyItems];
-  if (combined.length >= want) {
-    console.log(
-      `[NewsService] buffer filled: ${combined.length} items (themeId=${themeId}, FTS5=${ftsItems.length}, Tavily=${tavilyItems.length})`,
-    );
-    return { items: combined, cursor: 0, filledAt: Date.now() };
-  }
-
-  // 4) 仍然不足 → 随机补差（排除 FTS5 + Tavily 已选 link）
-  const need = want - combined.length;
-  const excludeLinks = new Set(
-    combined.map((i) => i.link).filter((l): l is string => typeof l === "string" && l.length > 0),
-  );
-  const randomItems = await pickRandomItems(cfg, excludeLinks, need);
-  const items = [...combined, ...randomItems];
-  console.log(
-    `[NewsService] buffer filled: ${items.length} items (themeId=${themeId}, FTS5=${ftsItems.length}, Tavily=${tavilyItems.length}, random=${randomItems.length})`,
-  );
-  return { items, cursor: 0, filledAt: Date.now() };
-}
-
-// Take the next `k` items from the buffer in insertion order.
-// Returns fewer than `k` when the buffer tail is short; advances
-// the cursor by the actual slice length.
-function takeFromBuffer(buf: NewsBuffer, k: number): NewsItemInput[] {
-  const start = buf.cursor;
-  const end = Math.min(start + k, buf.items.length);
-  if (start >= end) return [];
-  const slice = buf.items.slice(start, end);
-  buf.cursor = end;
-  return slice;
 }
 
 function shuffle<T>(arr: T[]): T[] {

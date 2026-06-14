@@ -12,11 +12,11 @@ const THEME_A: BuildMessagesInput = {
   id: "theme-a",
   name: "深夜电台",
   description: "一个安静的深夜聊天节目",
-  prompt: "你是{{name}}，一个{{personality}}。当前主题：{{theme.name}}。{{theme.description}}。",
+  prompt: "你是{{name}}，一个{{prompt}}。当前主题：{{theme.name}}。{{theme.description}}。",
   userPrompt: "听众留言：{{listenerMessages}}\n请生成下一段直播内容。",
   audiencePrompt: "",
   historyRounds: 5,
-  persona: { name: "小柔", personality: "温柔的电台主播" },
+  persona: { name: "小柔", prompt: "温柔的电台主播" },
 };
 
 const THEME_B: BuildMessagesInput = {
@@ -27,7 +27,7 @@ const THEME_B: BuildMessagesInput = {
   prompt: "你是{{name}}。",
   userPrompt: "请播报下一条新闻。",
   historyRounds: 2,
-  persona: { name: "老张", personality: "严肃的新闻主播" },
+  persona: { name: "老张", prompt: "严肃的新闻主播" },
 };
 
 beforeEach(() => {
@@ -156,7 +156,7 @@ describe("buildConversationMessages — template substitution", () => {
     expect(result.currentUserPrompt).toBe("听众：你好\n资讯：[1] OpenAI 融资 (来源: TechCrunch, 2h ago)\nOpenAI 完成了新一轮融资...\n请回应。");
   });
 
-  it("substitutes {{name}}, {{personality}}, {{theme.name}}, {{theme.description}} in systemPrompt", () => {
+  it("substitutes {{name}}, {{prompt}}, {{theme.name}}, {{theme.description}} in systemPrompt", () => {
     const result = buildConversationMessages(THEME_A, "", "", []);
     expect(result.systemPrompt).toBe(
       "你是小柔，一个温柔的电台主播。当前主题：深夜电台。一个安静的深夜聊天节目。",

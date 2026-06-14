@@ -507,10 +507,9 @@ class LiveEngine {
           console.error("[LiveEngine] news C-path failed:", err);
         }
       } else {
-        // A-path: per-theme content buffer. theme.id scopes the buffer;
-        // theme.description drives the FTS5 query at fill time.
+        // A-path: pick 3 random RSS items fresh per call
         try {
-          newsContext = await newsService.getCurrentNews(theme.id, theme.description);
+          newsContext = await newsService.getCurrentNews();
         } catch (err) {
           console.error("[LiveEngine] news A-path failed:", err);
         }
@@ -636,7 +635,7 @@ export interface BuildMessagesInput {
   userPrompt: string;
   audiencePrompt: string;
   historyRounds: number;
-  persona: { name: string; personality: string };
+  persona: { name: string; prompt: string };
 }
 
 export interface BuildMessagesResult {
@@ -655,7 +654,7 @@ export function buildConversationMessages(
   const substitute = (s: string): string =>
     s
       .replace(/\{\{name\}\}/g, theme.persona.name)
-      .replace(/\{\{personality\}\}/g, theme.persona.personality)
+      .replace(/\{\{prompt\}\}/g, theme.persona.prompt)
       .replace(/\{\{theme\.name\}\}/g, theme.name)
       .replace(/\{\{theme\.description\}\}/g, theme.description)
       .replace(/\{\{listenerMessages\}\}/g, messageContext)
@@ -664,7 +663,7 @@ export function buildConversationMessages(
 
   const systemPrompt = theme.prompt
     ? substitute(theme.prompt)
-    : `你是${theme.persona.name}，一个${theme.persona.personality}。当前直播主题：${theme.name}。${theme.description}。请根据以上信息自主发挥，生成一段直播内容（约100-200字）。`;
+    : `你是${theme.persona.name}，一个${theme.persona.prompt}。当前直播主题：${theme.name}。${theme.description}。请根据以上信息自主发挥，生成一段直播内容（约100-200字）。`;
 
   const promptTemplate = (messageContext.length > 0 ? theme.audiencePrompt : "") || theme.userPrompt || "请生成下一段直播内容。";
   const currentUserPrompt = substitute(promptTemplate);

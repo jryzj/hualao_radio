@@ -182,7 +182,7 @@ export default function ThemesPage() {
                 </select>
                 <textarea
                   className={`${textareaClass} [@media(min-width:640px)]:col-span-2`}
-                  placeholder="系统 Prompt（发给 LLM 的指令，可使用 {{name}} {{personality}} {{theme.name}} {{theme.description}} 等变量）"
+                  placeholder="系统 Prompt（发给 LLM 的指令，可使用 {{name}} {{prompt}} {{theme.name}} {{theme.description}} 等变量）"
                   value={form.prompt}
                   onChange={e => setForm({ ...form, prompt: e.target.value })}
                 />

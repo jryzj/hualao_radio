@@ -20,7 +20,7 @@ describe("Chat stream: LLM → sentence split → TTS → WebSocket broadcast", 
       include: { persona: true },
     });
     const systemPrompt = theme
-      ? `你是${theme.persona.name}，一个${theme.persona.personality}。`
+      ? `你是${theme.persona.name}，一个${theme.persona.prompt}。`
       : "你是一个友好的AI助手。";
 
     const prompt = "杭州的明天的天气怎么样";
