@@ -102,6 +102,7 @@ export interface NewsConfig {
   tavilyTimeRange: "d" | "w" | "m" | "y";
   decisionModelName: string;
   newsPoolSize: number;
+  newsBufferSize: number;
 }
 
 export const DEFAULT_NEWS_CONFIG: NewsConfig = {
@@ -117,6 +118,7 @@ export const DEFAULT_NEWS_CONFIG: NewsConfig = {
   tavilyTimeRange: "d",
   decisionModelName: "",
   newsPoolSize: 100,
+  newsBufferSize: 100,
 };
 
 export async function getNewsConfig(): Promise<NewsConfig> {
@@ -138,6 +140,7 @@ export async function getNewsConfig(): Promise<NewsConfig> {
     // return `null` from Prisma. Fall back to the default so old rows
     // keep behaving sanely after the migration.
     newsPoolSize: cfg.newsPoolSize ?? DEFAULT_NEWS_CONFIG.newsPoolSize,
+    newsBufferSize: cfg.newsBufferSize ?? DEFAULT_NEWS_CONFIG.newsBufferSize,
   };
 }
 

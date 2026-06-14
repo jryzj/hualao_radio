@@ -133,6 +133,7 @@ model NewsConfig {
   tavilyTimeRange     String   @default("d")
   decisionModelName   String   @default("")
   newsPoolSize        Int      @default(100)
+  newsBufferSize      Int      @default(100)
   updatedAt           DateTime @updatedAt
 }
 

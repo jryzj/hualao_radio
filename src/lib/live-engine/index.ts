@@ -507,10 +507,10 @@ class LiveEngine {
           console.error("[LiveEngine] news C-path failed:", err);
         }
       } else {
-        // A-path: theme.description drives the query (FTS5 → Tavily top-up).
-        // When description is empty, getCurrentNews falls back to random 3.
+        // A-path: per-theme content buffer. theme.id scopes the buffer;
+        // theme.description drives the FTS5 query at fill time.
         try {
-          newsContext = await newsService.getCurrentNews(theme.description);
+          newsContext = await newsService.getCurrentNews(theme.id, theme.description);
         } catch (err) {
           console.error("[LiveEngine] news A-path failed:", err);
         }
