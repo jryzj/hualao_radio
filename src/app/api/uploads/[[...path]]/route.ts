@@ -1,13 +1,21 @@
-// Catches /uploads/* at the App Router layer. Built-in static
-// serving of `public/` snapshots the directory at build time, so any
-// file written by the upload API after `next build` (i.e. every
-// production upload) 404s. This route reads the file at request
-// time and serves it. In dev the same files were served by the
-// built-in static layer; this just makes the post-build case work
-// the same way.
+// Catches /api/uploads/* at the App Router layer. The URL is
+// intentionally namespaced under /api to avoid the Next.js 14+
+// routing precedence issue where a catch-all route whose URL
+// segment overlaps with `public/` (e.g. /uploads/...) is
+// shadowed by the built-in static handler in production. Built-in
+// static serving of `public/` snapshots the directory at build
+// time, so any file written by the upload API after `next build`
+// (i.e. every production upload) 404s. This route reads the file
+// at request time and serves it.
+//
+// Note: the URL has a double "uploads/" segment
+// (/api/uploads/uploads/ref-audio/<id>/<file>). That's by design
+// — the DB column `Workflow.refAudioPath` stores
+// "uploads/ref-audio/..." and we keep that path stable across
+// dev and prod. Clean URL would require a data migration.
 //
 // Security: every request goes through resolveUnderPublic so a
-// crafted /uploads/../../etc/passwd can't escape public/.
+// crafted /api/uploads/../../etc/passwd can't escape public/.
 //
 // Known limitation: full-file in-memory read with no Range support.
 // Ref-audio is small (<5MB typical) and low-traffic, and the

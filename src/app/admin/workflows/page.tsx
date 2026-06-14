@@ -213,7 +213,7 @@ export default function WorkflowsPage() {
             <div style={s.audioRow}>
               {w.refAudioPath ? (
                 <>
-                  <audio controls src={`/${w.refAudioPath}`} style={{ height: 40 }} />
+                  <audio controls src={`/api/uploads/${w.refAudioPath}`} style={{ height: 40 }} />
                   <label style={s.fileInput}>
                     {uploadingId === w.id ? "上传中..." : "替换参考音频:"}
                     <input
