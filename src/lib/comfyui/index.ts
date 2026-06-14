@@ -116,6 +116,15 @@ export async function submitOmniVoiceJob(
         node35Inputs["ref_text"] = workflow.refText;
         console.log(`[comfyui] ref_text injected (${workflow.refText.length} chars)`);
       }
+
+      // 注入 instruct 到节点 35（仅 Clone 工作流，与 voice_instruct 是不同字段，
+      // 后者是 Voice Design 工作流的必填项，此处不动）
+      if (workflow?.instruct) {
+        const node35 = workflowJson["35"] as Record<string, unknown>;
+        const node35Inputs = node35["inputs"] as Record<string, unknown>;
+        node35Inputs["instruct"] = workflow.instruct;
+        console.log(`[comfyui] instruct injected (${workflow.instruct.length} chars)`);
+      }
     } catch (err) {
       console.error("[comfyui] ref audio upload error:", err);
       return null;

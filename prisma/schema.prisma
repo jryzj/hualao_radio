@@ -8,11 +8,11 @@ datasource db {
 }
 
 model Persona {
-  id        String   @id @default(cuid())
-  name      String
-  prompt    String
-  themes    Theme[]
-  createdAt DateTime @default(now())
+  id          String   @id @default(cuid())
+  name        String
+  personality String
+  themes      Theme[]
+  createdAt   DateTime @default(now())
 }
 
 model Workflow {
@@ -22,7 +22,7 @@ model Workflow {
   inputParams   String
   refAudioPath  String?
   refText       String?
-  instruct      String  @default("")
+  instruct      String   @default("")
   speed         Float   @default(1.0)
   themes        Theme[]
   createdAt     DateTime @default(now())
@@ -132,6 +132,8 @@ model NewsConfig {
   tavilyApiKey        String   @default("")
   tavilyTimeRange     String   @default("d")
   decisionModelName   String   @default("")
+  newsPoolSize        Int      @default(100)
+  newsBufferSize      Int      @default(100)
   updatedAt           DateTime @updatedAt
 }
 

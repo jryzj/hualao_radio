@@ -27,7 +27,6 @@ export default function WorkflowsPage() {
   const [form, setForm] = useState<CreateForm>({ name: "", workflowJson: "", inputParams: "", speed: "1", refText: "", instruct: "", refAudioFile: null });
   const [uploadingId, setUploadingId] = useState<string | null>(null);
   const [refTextEdits, setRefTextEdits] = useState<Record<string, string>>({});
-  const [speedEdits, setSpeedEdits] = useState<Record<string, string>>({});
   const [instructEdits, setInstructEdits] = useState<Record<string, string>>({});
 
   useEffect(() => { reload(); }, []);
@@ -35,7 +34,7 @@ export default function WorkflowsPage() {
 
   async function create(e: React.FormEvent) {
     e.preventDefault();
-    const { refAudioFile, refText, workflowJson, inputParams, speed, name } = form;
+    const { refAudioFile, refText, instruct, workflowJson, inputParams, speed, name } = form;
     // Step 1: JSON 创建工作流
     const res = await fetch("/api/admin/workflows", {
       method: "POST",
@@ -46,7 +45,7 @@ export default function WorkflowsPage() {
         inputParams: inputParams.split(",").map(s => s.trim()),
         speed: parseFloat(speed),
         refText: refText || null,
-        instruct: form.instruct,
+        instruct,
       }),
     });
     if (!res.ok) {
@@ -104,33 +103,37 @@ export default function WorkflowsPage() {
     reload();
   }
 
-  async function saveWorkflow(w: Workflow) {
-    const newSpeed = parseFloat(getSpeedEditVal(w.id, w.speed));
-    const newRefText = getEditVal(w.id, w.refText) || null;
-    const newInstruct = getInstructEditVal(w.id, w.instruct);
-    const body: Record<string, unknown> = {};
-    if (Number.isFinite(newSpeed) && newSpeed !== w.speed) body.speed = newSpeed;
-    if (newRefText !== w.refText) body.refText = newRefText;
-    if (newInstruct !== w.instruct) body.instruct = newInstruct;
-    if (Object.keys(body).length === 0) return;
-    const res = await fetch(`/api/admin/workflows/${w.id}`, {
+  async function saveRefText(workflowId: string, newVal: string, currentVal: string | null) {
+    const normalized = newVal || null;
+    if (normalized === currentVal) return;
+    const res = await fetch(`/api/admin/workflows/${workflowId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ refText: normalized }),
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      alert(`保存失败: ${err.error ?? res.status}`);
+      alert(`ref_text 保存失败: ${err.error ?? res.status}`);
     }
-    setSpeedEdits(prev => { const n = { ...prev }; delete n[w.id]; return n; });
-    setRefTextEdits(prev => { const n = { ...prev }; delete n[w.id]; return n; });
-    setInstructEdits(prev => { const n = { ...prev }; delete n[w.id]; return n; });
+    reload();
+  }
+
+  async function saveInstruct(workflowId: string, newVal: string, currentVal: string) {
+    if (newVal === currentVal) return;
+    const res = await fetch(`/api/admin/workflows/${workflowId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ instruct: newVal }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      alert(`instruct 保存失败: ${err.error ?? res.status}`);
+    }
     reload();
   }
 
   const getEditVal = (id: string, refText: string | null) => refTextEdits[id] ?? refText ?? "";
   const getInstructEditVal = (id: string, instruct: string) => instructEdits[id] ?? instruct ?? "";
-  const getSpeedEditVal = (id: string, speed: number) => speedEdits[id] ?? String(speed);
 
   const s = {
     page: { padding: "24px", maxWidth: 900 },
@@ -147,6 +150,7 @@ export default function WorkflowsPage() {
     audioRow: { display: "flex", gap: 12, alignItems: "center", marginTop: 8, flexWrap: "wrap" as const },
     fileInput: { fontSize: 12, color: "#9a958c" },
     refTextRow: { display: "flex", gap: 8, alignItems: "center", marginTop: 8, flexWrap: "wrap" as const },
+    instructRow: { display: "flex", gap: 8, alignItems: "center", marginTop: 6, flexWrap: "wrap" as const },
     saveBtn: { padding: "6px 12px", background: "linear-gradient(145deg, #e8a84c, #c77b4a)", border: "none", borderRadius: 4, color: "#0a0a0c", fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 500, letterSpacing: 1, cursor: "pointer" },
     saveBtnDisabled: { padding: "6px 12px", background: "#2a2a32", border: "1px solid #1a1a22", borderRadius: 4, color: "#5a5850", fontFamily: "'Oswald', sans-serif", fontSize: 10, fontWeight: 500, letterSpacing: 1, cursor: "not-allowed" },
   };
@@ -168,20 +172,20 @@ export default function WorkflowsPage() {
           <input placeholder="逗号分隔参数" value={form.inputParams} onChange={e => setForm({ ...form, inputParams: e.target.value })} style={s.input} />
         </label>
         <label style={s.label}>
-          instruct（节点 35 instruct）
-          <input
-            placeholder="instruct 值"
-            value={form.instruct}
-            onChange={e => setForm({ ...form, instruct: e.target.value })}
-            style={s.input}
-          />
-        </label>
-        <label style={s.label}>
           ref_text（克隆工作流节点 35 参考文本）
           <input
             placeholder="如：我们下期再见，记得点赞关注哦！拜拜！"
             value={form.refText}
             onChange={e => setForm({ ...form, refText: e.target.value })}
+            style={s.input}
+          />
+        </label>
+        <label style={s.label}>
+          instruct（克隆工作流节点 35 语音指令）
+          <input
+            placeholder="如：东北话 / 粤语 / 温柔女声"
+            value={form.instruct}
+            onChange={e => setForm({ ...form, instruct: e.target.value })}
             style={s.input}
           />
         </label>
@@ -204,23 +208,12 @@ export default function WorkflowsPage() {
             <div style={s.itemMeta}>
               <span>speed: <strong style={{ color: "#9a958c" }}>{w.speed}</strong></span>
               {w.inputParams && <span>params: {w.inputParams}</span>}
-            </div>
-            <div style={s.refTextRow}>
-              <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>speed:</span>
-              <input
-                type="number"
-                step="0.1"
-                min="0.5"
-                max="3"
-                value={getSpeedEditVal(w.id, w.speed)}
-                onChange={e => setSpeedEdits({ ...speedEdits, [w.id]: e.target.value })}
-                style={{ ...s.input, width: 100 }}
-              />
+              <span>instruct: <strong style={{ color: w.instruct ? "#9a958c" : "#3a3a40" }}>{w.instruct || "（未设置）"}</strong></span>
             </div>
             <div style={s.audioRow}>
               {w.refAudioPath ? (
                 <>
-                  <audio controls src={`/${w.refAudioPath}`} style={{ height: 32 }} />
+                  <audio controls src={`/${w.refAudioPath}`} style={{ height: 40 }} />
                   <label style={s.fileInput}>
                     {uploadingId === w.id ? "上传中..." : "替换参考音频:"}
                     <input
@@ -256,35 +249,34 @@ export default function WorkflowsPage() {
               <button onClick={() => remove(w.id)} style={{ ...s.delBtn, marginLeft: "auto" }}>删除工作流</button>
             </div>
             <div style={s.refTextRow}>
-              <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>instruct:</span>
-              <input
-                value={getInstructEditVal(w.id, w.instruct)}
-                onChange={e => setInstructEdits({ ...instructEdits, [w.id]: e.target.value })}
-                placeholder="（未设置）"
-                style={{ ...s.input, flex: 1, minWidth: 240 }}
-              />
-            </div>
-            <div style={s.refTextRow}>
               <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>ref_text:</span>
               <input
                 value={getEditVal(w.id, w.refText)}
                 onChange={e => setRefTextEdits({ ...refTextEdits, [w.id]: e.target.value })}
+                onBlur={e => saveRefText(w.id, e.target.value, w.refText)}
                 placeholder="（未设置）"
                 style={{ ...s.input, flex: 1, minWidth: 240 }}
               />
-              {(() => {
-                const speedChanged = getSpeedEditVal(w.id, w.speed) !== String(w.speed);
-                const refTextChanged = getEditVal(w.id, w.refText) !== (w.refText ?? "");
-                const instructChanged = getInstructEditVal(w.id, w.instruct) !== w.instruct;
-                const hasChanges = speedChanged || refTextChanged || instructChanged;
-                return (
-                  <button
-                    onClick={() => saveWorkflow(w)}
-                    disabled={!hasChanges}
-                    style={hasChanges ? s.saveBtn : s.saveBtnDisabled}
-                  >保存</button>
-                );
-              })()}
+              <button
+                onClick={() => saveRefText(w.id, getEditVal(w.id, w.refText), w.refText)}
+                disabled={getEditVal(w.id, w.refText) === (w.refText ?? "")}
+                style={getEditVal(w.id, w.refText) === (w.refText ?? "") ? s.saveBtnDisabled : s.saveBtn}
+              >保存</button>
+            </div>
+            <div style={s.instructRow}>
+              <span style={{ ...s.fileInput, color: "#5a5850", fontSize: 10, letterSpacing: 1 }}>instruct:</span>
+              <input
+                value={getInstructEditVal(w.id, w.instruct)}
+                onChange={e => setInstructEdits({ ...instructEdits, [w.id]: e.target.value })}
+                onBlur={e => saveInstruct(w.id, e.target.value, w.instruct)}
+                placeholder="（未设置）"
+                style={{ ...s.input, flex: 1, minWidth: 240 }}
+              />
+              <button
+                onClick={() => saveInstruct(w.id, getInstructEditVal(w.id, w.instruct), w.instruct)}
+                disabled={getInstructEditVal(w.id, w.instruct) === (w.instruct ?? "")}
+                style={getInstructEditVal(w.id, w.instruct) === (w.instruct ?? "") ? s.saveBtnDisabled : s.saveBtn}
+              >保存</button>
             </div>
           </li>
         ))}

@@ -7,7 +7,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  let body: { name?: unknown; prompt?: unknown };
+  let body: { name?: unknown; personality?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -16,17 +16,17 @@ export async function POST(req: NextRequest) {
   if (typeof body.name !== "string" || !body.name.trim()) {
     return NextResponse.json({ error: "name is required" }, { status: 400 });
   }
-  if (typeof body.prompt !== "string" || !body.prompt.trim()) {
-    return NextResponse.json({ error: "prompt is required" }, { status: 400 });
+  if (typeof body.personality !== "string" || !body.personality.trim()) {
+    return NextResponse.json({ error: "personality is required" }, { status: 400 });
   }
   // TypeScript control-flow narrowing is per-scope and doesn't carry
   // into a callback closure, so capture the narrowed strings as local
   // consts before handing them to withBusyRetry.
   const name = body.name.trim();
-  const prompt = body.prompt;
+  const personality = body.personality;
   try {
     const persona = await withBusyRetry(() => prisma.persona.create({
-      data: { name, prompt },
+      data: { name, personality },
     }));
     return NextResponse.json(persona);
   } catch {

@@ -55,11 +55,7 @@ export function MessageWall({
   const trackRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  // Active Web Animations API Animation, if any. Held in a ref so the
-  // cleanup pass can cancel it without re-running the effect.
-  // (iOS 26 fix: replaced the requestAnimationFrame loop — see the
-  // marquee effect below for why rAF is no longer reliable on iOS 26.)
-  const animRef = useRef<Animation | null>(null);
+  const rafRef = useRef<number | null>(null);
   const [reduced, setReduced] = useState(false);
   const [layout, setLayout] = useState<{ listH: number; frameH: number; gap: number }>({ listH: 0, frameH: 0, gap: 6 });
 
@@ -131,60 +127,37 @@ export function MessageWall({
   //   [S, L, S, L]          → spacerH + listH + 2 * gap
   const period = needSpacer ? listH + spacerH + gap : listH + gap;
 
-  // Web Animations API marquee (iOS 26 fix).
-  //
-  // The previous implementation drove the transform from a
-  // requestAnimationFrame loop, computing `translateY` each frame. That
-  // worked on iOS 14-18 but stalls on iOS 26 Safari, which throttles
-  // JS rAF to ~10fps when the page is not "fully visible" (low power
-  // mode, screen-off-but-page-alive, background tab, etc.) AND our
-  // `Math.min(dt, 0.05)` clamp hides the large time gaps — so the
-  // marquee either froze in place or stepped in 1-2px increments that
-  // read as "not scrolling" to the user.
-  //
-  // The Web Animations API runs on the browser's compositor thread, not
-  // the JS main thread, so the animation continues even when JS is
-  // throttled, the tab is in the background, or low power mode kicks
-  // in. We translate from 0 → -period over `period / pxPerSec` seconds
-  // with infinite iteration count and linear easing.
   useEffect(() => {
     const track = trackRef.current;
-    if (!track) return;
-    // Cancel any prior animation before deciding what to do this pass.
-    if (animRef.current) {
-      try { animRef.current.cancel(); } catch { /* noop */ }
-      animRef.current = null;
-    }
-    if (messages.length === 0 || reduced || frameH <= 0 || period <= 0) {
-      track.style.transform = "translateY(0)";
+    if (!track || messages.length === 0 || reduced || frameH <= 0 || period <= 0) {
+      if (track) track.style.transform = "translateY(0)";
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       return;
     }
 
     const pxPerSec = frameH / Math.max(speedSeconds, 1);
-    const durationMs = Math.max(100, (period / pxPerSec) * 1000);
-    const animation = track.animate(
-      [
-        { transform: "translateY(0)" },
-        { transform: `translateY(${-period}px)` },
-      ],
-      {
-        duration: durationMs,
-        iterations: Infinity,
-        easing: "linear",
-        // `fill: "none"` so cancellation in cleanup returns the element
-        // to its base style (we want translateY(0) on unmount, not a
-        // pinned final frame).
-        fill: "none",
-      },
-    );
-    animRef.current = animation;
+    let offset = 0;
+    let last = performance.now();
+
+    const tick = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      offset = (offset + pxPerSec * dt) % period;
+      track.style.transform = `translateY(${-offset}px)`;
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
     track.style.willChange = "transform";
+    track.style.transform = "translateY(0)";
+    rafRef.current = requestAnimationFrame(tick);
     return () => {
-      if (animRef.current) {
-        try { animRef.current.cancel(); } catch { /* noop */ }
-        animRef.current = null;
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
       }
-      track.style.willChange = "";
       track.style.transform = "translateY(0)";
     };
   }, [frameH, messages.length, period, reduced, speedSeconds]);
@@ -238,7 +211,7 @@ export function MessageWall({
     >
       <div
         ref={trackRef}
-        className="flex flex-col gap-1.5 p-3"
+        className="flex flex-col gap-1.5 p-3 will-change-transform"
       >
         <div ref={listRef} className="flex flex-col [gap:inherit]">{list}</div>
         {spacerH > 0 && <div className="flex-none" style={{ height: spacerH }} aria-hidden />}
