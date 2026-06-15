@@ -373,16 +373,16 @@ server {
 
 ## 九、管理员控制台 `/admin`
 
-| 板块                  | 功能                                                  |
-| ------------------- | --------------------------------------------------- |
-| **主题 (Themes)**     | 配 Persona × Workflow，激活/停用，**全局唯一激活**。`description` 字段驱动 A 路径新闻选取（见 §新闻） |
-| **人物 (Personas)**   | 主播人设：名字 + `personality` 字段（性格/风格描述，是 LLM 段落的人设来源） |
+| 板块                  | 功能                                                                                          |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| **主题 (Themes)**     | 配 Persona × Workflow，激活/停用，**全局唯一激活**。`description` 字段驱动 A 路径新闻选取（见 §新闻）                    |
+| **人物 (Personas)**   | 主播人设：名字 + `personality` 字段（性格/风格描述，是 LLM 段落的人设来源）                                           |
 | **工作流 (Workflows)** | ComfyUI TTS 工作流 JSON + 参考音频 + 参考文本 + **`instruct` 字段**（克隆工作流节点 35 的语音指令，如"东北话"/"粤语"/"温柔女声"） |
-| **新闻 (News)**       | RSS 源管理、自动抓取计划、Tavily 实时联网、**每主题内容缓冲**（见 §新闻） |
-| **留言管理 (Messages)** | 听众留言 AI 审核（pending/approved/rejected）、人工通过/拒绝/隐藏/删除 |
-| **音频缓冲 (Buffer)**   | 调预缓冲句数 / 秒数 / 模式 / 分组大小                             |
-| **LLM 配置**          | API URL、Key、模型名（持久化到 DB）                            |
-| **ComfyUI 配置**      | 服务端 URL、Token、Webhook URL、超时                        |
+| **新闻 (News)**       | RSS 源管理、自动抓取计划、Tavily 实时联网、**每主题内容缓冲**（见 §新闻）                                               |
+| **留言管理 (Messages)** | 听众留言 AI 审核（pending/approved/rejected）、人工通过/拒绝/隐藏/删除                                         |
+| **音频缓冲 (Buffer)**   | 调预缓冲句数 / 秒数 / 模式 / 分组大小                                                                     |
+| **LLM 配置**          | API URL、Key、模型名（持久化到 DB）                                                                    |
+| **ComfyUI 配置**      | 服务端 URL、Token、Webhook URL、超时                                                                |
 
 > 所有运行时配置**热生效**，不需要重启进程。
 
@@ -409,11 +409,11 @@ server {
 
 直播 A 路径（无 pending listener messages）下，从 RSS + Tavily 拉新闻按"主题描述"过滤后喂给 LLM：
 
-| 路径          | 何时走                            | 行为                                                                                       |
-| ----------- | ------------------------------ | ---------------------------------------------------------------------------------------- |
-| **A 路径**    | 无听众留言时（**默认**）                | 用 `theme.description` 当 FTS5 查询词 → Tavily top-up → 仍不足用随机补足（去重已选 link），全部塞进**每主题缓冲** |
-| **C 路径**    | 有听众留言时                          | 把留言当 query 走 FTS5 + Tavily（不经过缓冲），与听众消息强相关                                              |
-| **随机 fallback** | 描述为空 / FTS5+Tavily 都 0 命中         | 直接随机 RSS 池（仍然不重复已选 link）                                                          |
+| 路径              | 何时走                       | 行为                                                                                   |
+| --------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| **A 路径**        | 无听众留言时（**默认**）            | 用 `theme.description` 当 FTS5 查询词 → Tavily top-up → 仍不足用随机补足（去重已选 link），全部塞进**每主题缓冲** |
+| **C 路径**        | 有听众留言时                    | 把留言当 query 走 FTS5 + Tavily（不经过缓冲），与听众消息强相关                                           |
+| **随机 fallback** | 描述为空 / FTS5+Tavily 都 0 命中 | 直接随机 RSS 池（仍然不重复已选 link）                                                             |
 
 ### 11.2 每主题内容缓冲
 
@@ -431,15 +431,15 @@ server {
 
 ### 11.3 配置项（`NewsConfig` 表）
 
-| 字段 | 默认 | 含义 |
-| --- | --- | --- |
-| `newsPoolSize` | 100 | 随机补差时从 RSS 池捞的"候选池"大小 |
-| `newsBufferSize` | 100 | 每主题内容缓冲总条数（`fillBuffer` 上限） |
-| `maxNewsItems` | 3 | 每次 LLM 调用取几条（= `{{news}}` 渲染条数） |
-| `activeWindowMs` | 24h | RSS 条目"新"的判定窗口（超过这个时间不入选） |
-| `tavilyApiKey` | — | Tavily 联网搜索 key（空则跳过 Tavily 阶段） |
-| `tavilyTimeRange` | `d` | Tavily 时间范围（`d`/`w`/`m`/`y`） |
-| `maxItemChars` / `maxTotalChars` | 2000 / 5000 | 渲染 `{{news}}` 的截断上限 |
+| 字段                               | 默认          | 含义                              |
+| -------------------------------- | ----------- | ------------------------------- |
+| `newsPoolSize`                   | 100         | 随机补差时从 RSS 池捞的"候选池"大小           |
+| `newsBufferSize`                 | 100         | 每主题内容缓冲总条数（`fillBuffer` 上限）     |
+| `maxNewsItems`                   | 3           | 每次 LLM 调用取几条（= `{{news}}` 渲染条数） |
+| `activeWindowMs`                 | 24h         | RSS 条目"新"的判定窗口（超过这个时间不入选）       |
+| `tavilyApiKey`                   | —           | Tavily 联网搜索 key（空则跳过 Tavily 阶段） |
+| `tavilyTimeRange`                | `d`         | Tavily 时间范围（`d`/`w`/`m`/`y`）    |
+| `maxItemChars` / `maxTotalChars` | 2000 / 5000 | 渲染 `{{news}}` 的截断上限             |
 
 所有配置项都在 `/admin/news` 可视化改、**热生效**。
 
@@ -447,21 +447,21 @@ server {
 
 `buildConversationMessages` 支持的占位符：
 
-| 占位符 | 替换为 |
-| --- | --- |
-| `{{name}}` | persona.name |
-| `{{personality}}` | persona.personality（**注意**：历史版本叫 `{{prompt}}`，已重命名以避免与 LLM "prompt" 概念混淆） |
-| `{{theme.name}}` / `{{theme.description}}` | 当前主题的名字 / 描述 |
-| `{{listenerMessages}}` | 听众留言内容（" \| " 拼接） |
-| `{{listenerAuthors}}` | 听众作者名（"、 " 拼接） |
-| `{{news}}` | 缓冲中取出的 K 条新闻（按 `formatNewsContext` 渲染） |
+| 占位符                                        | 替换为                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------- |
+| `{{name}}`                                 | persona.name                                                              |
+| `{{personality}}`                          | persona.personality（**注意**：历史版本叫 `{{prompt}}`，已重命名以避免与 LLM "prompt" 概念混淆） |
+| `{{theme.name}}` / `{{theme.description}}` | 当前主题的名字 / 描述                                                              |
+| `{{listenerMessages}}`                     | 听众留言内容（" \| " 拼接）                                                         |
+| `{{listenerAuthors}}`                      | 听众作者名（"、 " 拼接）                                                            |
+| `{{news}}`                                 | 缓冲中取出的 K 条新闻（按 `formatNewsContext` 渲染）                                    |
 
 ---
 
 ## 十二、项目结构
 
 ```
-radioai/
+adioai/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   ├── page.tsx            # 听众首页
@@ -534,7 +534,7 @@ radioai/
 ├── jest.config.ts              # next/jest preset
 ├── vitest.config.ts            # node env，60s 超时
 ├── package.json                # dev/build/start/lint/ws-server 脚本
-└── CLAUDE.md / AGENTS.md       # 协作约定
+
 ```
 
 ---
@@ -545,8 +545,11 @@ radioai/
 <summary><b>Q：浏览器一直报 <code>WebSocket connection to wss://...:8080/messages failed</code></b></summary>
 
 - 生产必须**用反代终结 WSS**（Caddy/Nginx/Cloudflare），不能直接浏览器连裸 `ws-server:8080`
+
 - 设置 `NEXT_PUBLIC_WS_URL=wss://your.domain`（**无端口**走 443，**带端口**用 `:8443` 之类）
+
 - 改完 **必须** `npm run build`，因为 `NEXT_PUBLIC_` 是构建时注入的
+
 - 确认防火墙放行；`ws-server` 进程要先于 Next 启动
   
   </details>
@@ -561,6 +564,7 @@ radioai/
 - URL 看起来双 `uploads/`（`/api/uploads/uploads/ref-audio/...`），但 DB 存的 `Workflow.refAudioPath` 路径不变，无需数据迁移
 
 确认：
+
 - 反代 Caddy/Nginx 把 `/api/uploads/*` 转给 Next.js（**不是** `/uploads/*`），参考 §8.3
 - 上传后**重新 build 并重启**（`npm run build && pm2 restart`）。只在 dev 模式跑 `/admin/workflows` 不会复现
 - 文件实际写在 `/public/uploads/ref-audio/<id>/<file>`（`PUBLIC_ROOT = path.resolve(process.cwd(), 'public')`，prod 容器里 cwd 通常是 `/`）
@@ -585,7 +589,9 @@ radioai/
 <summary><b>Q：iOS 锁屏后音频停了</b></summary>
 
 1. 必须先 **Safari → 分享 → 添加到主屏幕**，作为 PWA 启动（不是从书签进）
+
 2. PWA 启动后锁屏应能看到控制中心媒体卡片
+
 3. iOS < 16.4 设备无法真正后台播放，会被强制暂停
    
    </details>
@@ -594,7 +600,9 @@ radioai/
 <summary><b>Q：Android 熄屏后音频停了</b></summary>
 
 - Android Chrome 自带后台播放策略，锁屏一般不会停
+
 - 如果停了，检查 `chrome://flags` 的"媒体会话"和"后台限制"
+
 - Wake Lock 在锁屏后无法阻止熄屏——需要常亮屏幕的话同时打开系统的"保持唤醒"开发者选项
   
   </details>
