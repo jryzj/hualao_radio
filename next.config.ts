@@ -41,11 +41,36 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Next.js 16 blocks cross-origin dev resources by default. Allow
-  // 127.0.0.1 alongside localhost so the listener/admin UI works
-  // whether the developer types either host into the address bar.
-  // Only affects `next dev`; production builds ignore this.
-  allowedDevOrigins: ["localhost", "127.0.0.1"],
+  // Next.js 16 blocks cross-origin requests to dev-only assets/endpoints
+  // unless the origin is explicitly allowed. Desktop dev usually uses
+  // localhost, but real phones hit the machine over LAN IP
+  // (for example 192.168.x.x), so client hydration can fail and every
+  // button appears "dead" unless we allow the common private subnets.
+  //
+  // This only affects `next dev`; production builds ignore it.
+  allowedDevOrigins: [
+    "localhost",
+    "127.0.0.1",
+    "0.0.0.0",
+    "192.168.*.*",
+    "10.*.*.*",
+    "172.16.*.*",
+    "172.17.*.*",
+    "172.18.*.*",
+    "172.19.*.*",
+    "172.20.*.*",
+    "172.21.*.*",
+    "172.22.*.*",
+    "172.23.*.*",
+    "172.24.*.*",
+    "172.25.*.*",
+    "172.26.*.*",
+    "172.27.*.*",
+    "172.28.*.*",
+    "172.29.*.*",
+    "172.30.*.*",
+    "172.31.*.*",
+  ],
   async headers() {
     return [
       {

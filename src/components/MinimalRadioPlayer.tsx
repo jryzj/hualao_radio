@@ -55,7 +55,9 @@ export function MinimalRadioPlayer({
   onTogglePlay,
 }: Props) {
   const [now, setNow] = useState<Date | null>(null);
-  const [viewport, setViewport] = useState(getViewportSize);
+  // Start at {0,0} on both server and client so the first render matches.
+  // The real viewport is read in the effect below (runs only in the browser).
+  const [viewport, setViewport] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     const tick = () => setNow(new Date());
@@ -69,6 +71,7 @@ export function MinimalRadioPlayer({
 
   useEffect(() => {
     const updateViewport = () => setViewport(getViewportSize());
+    updateViewport();
     const vv = window.visualViewport;
     window.addEventListener("resize", updateViewport);
     window.addEventListener("orientationchange", updateViewport);
@@ -167,6 +170,19 @@ export function MinimalRadioPlayer({
             <button
               type="button"
               onClick={onTogglePlay}
+              // iOS Safari hit-test fix (same pattern as the FABs in
+              // src/app/page.tsx and the EnterOverlay button):
+              // the right column has `backdrop-blur-[20px]`, which
+              // promotes the whole column to a GPU composited layer.
+              // Inside that layer, static-positioned descendants lose
+              // hit-testing on iOS Safari — taps that visually land
+              // on the button are swallowed by the parent's composited
+              // layer. Giving the button its own stacking context via
+              // `position: relative; zIndex: 1` lifts it out so the
+              // click reaches the handler. DevTools' mobile emulation
+              // doesn't reproduce this, so it only shows up on real
+              // devices.
+              style={{ position: "relative", zIndex: 1 }}
               className={cn(
                 "inline-flex min-h-[42px] min-w-[116px] items-center justify-center rounded-full px-4 text-[15px] font-semibold tracking-[0.12em] transition-all duration-200 sm:min-h-[46px] sm:min-w-[136px] sm:px-6 sm:text-[16px] md:min-h-[50px] md:min-w-[150px] md:text-[18px] max-xs:min-h-[36px] max-xs:min-w-[102px] max-xs:px-3.5 max-xs:text-[13px] landscape-short:min-h-[38px] landscape-short:min-w-[108px] landscape-short:px-4 landscape-short:text-[14px]",
                 isPlaying

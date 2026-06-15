@@ -46,7 +46,7 @@ RadioAI 是一套「**拟人主播 + 实时广播**」系统：
 
 | 进程                        | 端口                          | 角色                            | 启动方式                        |
 | ------------------------- | --------------------------- | ----------------------------- | --------------------------- |
-| `next dev` / `next start` | `3000`                      | 听众页 + 管理端 + API + 中间件         | `npm run dev` / `npm start` |
+| `next dev` / `next start` | `3000`                      | 听众页 + 管理端 + API + 中间件         | `npm run dev` / `npm start`（**互斥**，见 §6.3 末尾警告；`npm start` 走 `prestart → migrate-with-retry.cjs → next start`） |
 | `tsx ws-server/index.ts`  | `8080` (WS) + `8081` (HTTP) | WebSocket 扇出 + 内部 HTTP 广播 API | `npm run ws-server`         |
 
 > ⚠️ **必须双进程运行** —— Next.js 不会自己起 WebSocket。广播链路：Next 进程 → fetch 127.0.0.1:8081（带 token）→ ws-server → 推给所有浏览器 WS 客户端。
@@ -157,6 +157,8 @@ npm run ws-server
 ```
 
 打开 <http://localhost:3000> 听广播，<http://localhost:3000/admin> 进管理端（默认密码为 `.env` 里的 `ADMIN_PASSWORD`）。
+
+> ⚠️ **不要同时跑 `npm run dev` 和 `npm start`** —— 两者都会打开 dev.db，且 `next start` 的 PrismaClient 在孤儿进程下会一直持有写锁。生产侧需要切到 prod 模式时，先在 dev 终端 Ctrl-C 或 `taskkill /F /PID <pid>` 干掉 `next dev`/`next start` 进程再切。`npm start` 已经走 `scripts/migrate-with-retry.cjs`，能在锁住的瞬间自动重试 12 次（约 30 s 上限），但只是兜底，不是治本——长持锁（孤儿进程）的场景仍然会让启动延迟打满整个预算。
 
 ### 6.4 第一次使用流程
 

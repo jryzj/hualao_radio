@@ -228,12 +228,13 @@ export default function Home() {
   const [wallOpen, setWallOpen] = useState(false);
   const [inputOpen, setInputOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [displayTheme, setDisplayTheme] = useState<DisplayThemeId>(() => {
-    if (typeof window === "undefined") return "mist";
-    const savedTheme = window.localStorage.getItem(DISPLAY_THEME_KEY);
-    if (savedTheme === "cyber" || savedTheme === "mist") return savedTheme;
-    return "mist";
-  });
+  // Theme state must initialize to a value that's identical on the server
+  // and the client, otherwise the SSR HTML and the first client render
+  // disagree about which <RadioPlayer> tree to mount (cyber vs mist) and
+  // React throws hydration error #418. We pick "mist" as the universal
+  // default and rehydrate the user's choice from localStorage in a
+  // post-mount effect below; this effect also no-ops on the server.
+  const [displayTheme, setDisplayTheme] = useState<DisplayThemeId>("mist");
   const toggleWall = useCallback(() => {
     setWallOpen(v => !v);
     setInputOpen(false);
@@ -248,6 +249,20 @@ export default function Home() {
     setSettingsOpen(v => !v);
     setWallOpen(false);
     setInputOpen(false);
+  }, []);
+
+  // Rehydrate the saved theme once the client has mounted. Runs before
+  // any user interaction can read displayTheme, so a returning user
+  // still sees their last choice after the brief "mist" flash on first
+  // paint. We also split the "read on mount" effect from the
+  // "write on change" effect below so the localStorage write is
+  // guaranteed to skip the initial rehydration.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const savedTheme = window.localStorage.getItem(DISPLAY_THEME_KEY);
+    if (savedTheme === "cyber" || savedTheme === "mist") {
+      setDisplayTheme(savedTheme);
+    }
   }, []);
 
   useEffect(() => {
