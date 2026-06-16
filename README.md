@@ -44,10 +44,10 @@ RadioAI 是一套「**拟人主播 + 实时广播**」系统：
 └──────────────────────┘            └────────────────────────────────────────────┘
 ```
 
-| 进程                        | 端口                          | 角色                            | 启动方式                        |
-| ------------------------- | --------------------------- | ----------------------------- | --------------------------- |
+| 进程                        | 端口                          | 角色                            | 启动方式                                                                                                           |
+| ------------------------- | --------------------------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | `next dev` / `next start` | `3000`                      | 听众页 + 管理端 + API + 中间件         | `npm run dev` / `npm start`（**互斥**，见 §6.3 末尾警告；`npm start` 走 `prestart → migrate-with-retry.cjs → next start`） |
-| `tsx ws-server/index.ts`  | `8080` (WS) + `8081` (HTTP) | WebSocket 扇出 + 内部 HTTP 广播 API | `npm run ws-server`         |
+| `tsx ws-server/index.ts`  | `8080` (WS) + `8081` (HTTP) | WebSocket 扇出 + 内部 HTTP 广播 API | `npm run ws-server`                                                                                            |
 
 > ⚠️ **必须双进程运行** —— Next.js 不会自己起 WebSocket。广播链路：Next 进程 → fetch 127.0.0.1:8081（带 token）→ ws-server → 推给所有浏览器 WS 客户端。
 
@@ -535,8 +535,7 @@ adioai/
 ├── eslint.config.mjs           # flat config，next preset
 ├── jest.config.ts              # next/jest preset
 ├── vitest.config.ts            # node env，60s 超时
-├── package.json                # dev/build/start/lint/ws-server 脚本
-
+└── package.json                # dev/build/start/lint/ws-server 脚本
 ```
 
 ---
