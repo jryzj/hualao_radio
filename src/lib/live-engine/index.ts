@@ -34,6 +34,24 @@ const globalState = globalThis as unknown as {
   playingClients: Set<string>;
   lastKnownOnline: number;
   onlineStatsInterval: ReturnType<typeof setInterval> | null;
+  // Generation-surplus accumulator (server-side self-throttle when
+  // LLM/TTS is consistently faster than the client can consume):
+  //   generationSurplusMs — sum of (L2 − L1) over recent TTS units,
+  //                         where L1 is the per-unit TTS submission →
+  //                         broadcast latency and L2 is the audio's
+  //                         own playback duration (parsed from the
+  //                         WAV header). The accumulator grows when
+  //                         the server is ahead of playback and is
+  //                         reset to 0 after every
+  //                         consumeGenerationSurplusPause() that
+  //                         actually sleeps. See
+  //                         recordGenerationSurplus / consumeGenerationSurplusPause
+  //                         below. Stored on globalThis (same pattern
+  //                         as the other engine state) so the
+  //                         measurement site in src/lib/comfyui can
+  //                         update it without importing the engine
+  //                         class.
+  generationSurplusMs: number;
 };
 if (globalState.liveEngineRunning === undefined) globalState.liveEngineRunning = false;
 if (globalState.liveEngineSegmentCount === undefined) globalState.liveEngineSegmentCount = 0;
@@ -42,6 +60,54 @@ if (globalState.conversationHistory === undefined) globalState.conversationHisto
 if (globalState.playingClients === undefined) globalState.playingClients = new Set();
 if (globalState.lastKnownOnline === undefined) globalState.lastKnownOnline = 0;
 if (globalState.onlineStatsInterval === undefined) globalState.onlineStatsInterval = null;
+if (globalState.generationSurplusMs === undefined) globalState.generationSurplusMs = 0;
+
+// Called from src/lib/comfyui's broadcast path once it knows both the
+// generation latency (L1) and the audio's own playback duration (L2).
+// D = L2 − L1 is the per-unit "surplus": positive when the server
+// produced the audio faster than the client will play it (the
+// problem case we want to throttle), negative when the server fell
+// behind. The accumulator ΣD is what triggers the actual pause. The
+// measurement stays in the TTS broadcast path (L1/L2 are TTS-stage
+// metrics), but the consumption point has moved upstream: instead of
+// sleeping before the next submitOmniVoiceJob, the engine now sleeps
+// before pulling the next LLM segment in generateNextSegment().
+export function recordGenerationSurplus(L1Ms: number, L2Ms: number): void {
+  const d = L2Ms - L1Ms;
+  if (!Number.isFinite(d)) return;
+  globalState.generationSurplusMs += d;
+}
+
+// Called from generateNextSegment() before pulling the next LLM
+// segment. If the accumulated surplus exceeds the threshold A, sleep
+// (ΣD − A/2) ms (leaving a safety margin of A/2 below the trigger so
+// we don't re-fire on the very next segment), then reset the
+// accumulator. This is the upstream application point — throttling
+// here naturally also stops new TTS work, since no new text means no
+// new audio units to submit.
+//
+// A <= 0 disables the feature entirely — useful for emergency
+// "pause-the-throttle" toggles and for the existing tests that
+// shouldn't accidentally inject sleeps.
+export function consumeGenerationSurplusPause(A: number): Promise<void> {
+  if (!A || A <= 0) {
+    globalState.generationSurplusMs = 0;
+    return Promise.resolve();
+  }
+  const D = globalState.generationSurplusMs;
+  if (D <= A) return Promise.resolve();
+  const wait = Math.max(0, D - A / 2);
+  console.log(
+    `[LiveEngine] generation surplus ${Math.round(D)}ms > threshold ${A}ms, pausing ${Math.round(wait)}ms`,
+  );
+  globalState.generationSurplusMs = 0;
+  return new Promise((r) => setTimeout(r, wait));
+}
+
+// Reset hook used by the engine's stop()/flush path and by tests.
+export function resetGenerationSurplus(): void {
+  globalState.generationSurplusMs = 0;
+}
 
 export interface LiveEngineCallbacks {
   onAudioReady?: (audioBuffer: Buffer) => void;
@@ -105,6 +171,10 @@ class LiveEngine {
     // generation kicks in.
     globalState.playingClients.clear();
     globalState.lastKnownOnline = 0;
+    // Flush just dropped the client buffer; any pending generation
+    // surplus is now over-counted. Drop it so a fresh start doesn't
+    // immediately pay off a phantom backlog.
+    resetGenerationSurplus();
     this.stopOnlineStatsPoller();
     import("@/lib/ws-server").then(m => m.wsFlush()).catch(() => {});
   }
@@ -482,6 +552,27 @@ class LiveEngine {
 
     this.isGeneratingLLM = true;
     try {
+      // Reload audio buffer config so admin changes to pauseThresholdMs
+      // take effect on the next segment (same pattern as startRoundTTS).
+      // startRoundTTS will reload it again before processNextUnit runs,
+      // but we need the current value here for the pause check below.
+      let bufferCfg = this.bufferCfg;
+      try {
+        bufferCfg = await getAudioBufferConfig();
+        this.bufferCfg = bufferCfg;
+      } catch (err) {
+        console.error("[LiveEngine] Failed to load audio buffer config, fallback to default:", err);
+        bufferCfg = DEFAULT_AUDIO_BUFFER;
+      }
+
+      // Self-throttle before pulling more text from the LLM. If recent
+      // TTS units have landed much faster than they play (cumulative
+      // ΣD = Σ(L2 − L1) > threshold A), sleep (ΣD − A/2) ms and reset
+      // the accumulator. The measurement site (L1/L2) stays in the TTS
+      // broadcast path because those are TTS-stage metrics; this is the
+      // upstream application point. A<=0 disables the throttle.
+      await consumeGenerationSurplusPause(bufferCfg.pauseThresholdMs);
+
       const theme = await prisma.theme.findFirst({ where: { isActive: true }, include: { persona: true } });
       if (!theme || !globalState.liveEngineRunning) return;
 

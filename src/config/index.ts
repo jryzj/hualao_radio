@@ -57,6 +57,13 @@ export interface AudioBufferConfig {
   prebufferSeconds: number;
   prebufferMode: "sentences" | "seconds" | "both" | "group" | "paragraph";
   prebufferGroupSize: number;
+  // Generation-surplus threshold for the live engine's self-throttle.
+  // When the cumulative (L2 − L1) across recent TTS units exceeds
+  // this value, the engine sleeps (ΣD − A/2) ms before pulling the
+  // next LLM segment (the upstream application point). 0 or negative
+  // disables the throttle. See
+  // src/lib/live-engine/index.ts:consumeGenerationSurplusPause.
+  pauseThresholdMs: number;
 }
 
 export const DEFAULT_AUDIO_BUFFER: AudioBufferConfig = {
@@ -64,6 +71,7 @@ export const DEFAULT_AUDIO_BUFFER: AudioBufferConfig = {
   prebufferSeconds: 8,
   prebufferMode: "sentences",
   prebufferGroupSize: 3,
+  pauseThresholdMs: 60_000,
 };
 
 export async function getAudioBufferConfig(): Promise<AudioBufferConfig> {
@@ -74,6 +82,11 @@ export async function getAudioBufferConfig(): Promise<AudioBufferConfig> {
     prebufferSeconds: cfg.prebufferSeconds,
     prebufferMode: (cfg.prebufferMode as AudioBufferConfig["prebufferMode"]) ?? "sentences",
     prebufferGroupSize: cfg.prebufferGroupSize ?? 3,
+    // AudioBufferConfig rows written before the pauseThresholdMs
+    // column existed return `null` from Prisma. Fall back to the
+    // default so the throttle keeps behaving sanely across the
+    // migration — no special "is column present" branch needed.
+    pauseThresholdMs: cfg.pauseThresholdMs ?? DEFAULT_AUDIO_BUFFER.pauseThresholdMs,
   };
 }
 
@@ -85,6 +98,7 @@ export async function setAudioBufferConfig(cfg: AudioBufferConfig): Promise<void
       prebufferSeconds: cfg.prebufferSeconds,
       prebufferMode: cfg.prebufferMode,
       prebufferGroupSize: cfg.prebufferGroupSize ?? 3,
+      pauseThresholdMs: cfg.pauseThresholdMs ?? DEFAULT_AUDIO_BUFFER.pauseThresholdMs,
     },
   });
 }

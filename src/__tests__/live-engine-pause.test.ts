@@ -6,6 +6,14 @@
 // and the public reportClientPlaying() / start() / stop() lifecycle
 // that drives it.
 //
+// Also covers the "self-throttle when generation outpaces the
+// client" feature: Σ(L2 − L1) > pauseThresholdMs triggers a sleep
+// of (ΣD − A/2) ms before pulling the next LLM segment — the
+// upstream application point. The accumulator lives on globalThis
+// (same pattern as the rest of the engine's module-scoped state)
+// and is consumed at the start of generateNextSegment. See
+// src/lib/live-engine/index.ts:consumeGenerationSurplusPause.
+//
 // Per-client tracking (vs a single global boolean) matters because
 // a single-flag design would let one listener's STOP pause the
 // engine for everyone else. The set of currently-playing clientIds
@@ -31,7 +39,7 @@ const { submitOmniVoiceJobSpy, wsGetStatsMock, wsFlushMock, prismaMock, getLLMCo
     message: { findUnique: vi.fn(async () => null), update: vi.fn(async () => null) },
   },
   getLLMConfigMock: vi.fn(async () => null),
-  getAudioBufferConfigMock: vi.fn(async () => ({ prebufferMode: "sentences", prebufferSentences: 3, prebufferGroupSize: 3, prebufferSeconds: 0, maxBufferSentences: 5 })),
+  getAudioBufferConfigMock: vi.fn(async () => ({ prebufferMode: "sentences", prebufferSentences: 3, prebufferGroupSize: 3, prebufferSeconds: 0, pauseThresholdMs: 60_000 })),
   newsServiceMock: {
     triggerCPathSync: vi.fn(async () => ""),
     getCurrentNews: vi.fn(async () => ""),
@@ -56,7 +64,7 @@ vi.mock("../lib/prisma", () => ({
 vi.mock("../config", () => ({
   getLLMConfig: getLLMConfigMock,
   getAudioBufferConfig: getAudioBufferConfigMock,
-  DEFAULT_AUDIO_BUFFER: { prebufferMode: "sentences", prebufferSentences: 3, prebufferGroupSize: 3, prebufferSeconds: 0, maxBufferSentences: 5 },
+  DEFAULT_AUDIO_BUFFER: { prebufferMode: "sentences", prebufferSentences: 3, prebufferGroupSize: 3, prebufferSeconds: 0, pauseThresholdMs: 60_000 },
 }));
 
 vi.mock("../lib/news", () => ({
@@ -68,6 +76,11 @@ vi.mock("../lib/moderation", () => ({
 }));
 
 import { liveEngine } from "../lib/live-engine/index";
+import {
+  recordGenerationSurplus,
+  consumeGenerationSurplusPause,
+  resetGenerationSurplus,
+} from "../lib/live-engine/index";
 
 // Access the engine's private globalThis-backing state for assertions
 // in tests that need to inspect it. The fields we touch here are
@@ -79,6 +92,7 @@ function getEngineState() {
     playingClients: Set<string>;
     lastKnownOnline: number;
     onlineStatsInterval: ReturnType<typeof setInterval> | null;
+    generationSurplusMs: number;
   };
 }
 
@@ -97,6 +111,7 @@ beforeEach(() => {
     clearInterval(s.onlineStatsInterval);
     s.onlineStatsInterval = null;
   }
+  s.generationSurplusMs = 0;
   // Reset all mocks so call counts don't leak between tests.
   submitOmniVoiceJobSpy.mockClear();
   wsGetStatsMock.mockClear();
@@ -106,7 +121,7 @@ beforeEach(() => {
   getLLMConfigMock.mockClear();
   getLLMConfigMock.mockResolvedValue(null);
   getAudioBufferConfigMock.mockClear();
-  getAudioBufferConfigMock.mockResolvedValue({ prebufferMode: "sentences", prebufferSentences: 3, prebufferGroupSize: 3, prebufferSeconds: 0, maxBufferSentences: 5 });
+  getAudioBufferConfigMock.mockResolvedValue({ prebufferMode: "sentences", prebufferSentences: 3, prebufferGroupSize: 3, prebufferSeconds: 0, pauseThresholdMs: 60_000 });
   newsServiceMock.getCurrentNews.mockClear();
   newsServiceMock.triggerCPathSync.mockClear();
   newsServiceMock.getCurrentNews.mockResolvedValue("");
@@ -266,5 +281,207 @@ describe("stop() resets pause-feature state", () => {
     liveEngine.stop();
     expect(getEngineState().playingClients.size).toBe(0);
     expect(getEngineState().lastKnownOnline).toBe(0);
+  });
+
+  it("resets the generation-surplus accumulator on stop", () => {
+    // After a flush, any pending surplus is over-counted: the client
+    // just dropped everything it had buffered. Drop the accumulator
+    // so the next start() doesn't pay off a phantom backlog.
+    getEngineState().generationSurplusMs = 123_456;
+    liveEngine.stop();
+    expect(getEngineState().generationSurplusMs).toBe(0);
+  });
+});
+
+describe("generation surplus accumulator", () => {
+  // Helpers — keep tests below readable.
+  const surplus = () => getEngineState().generationSurplusMs;
+
+  beforeEach(() => {
+    resetGenerationSurplus();
+  });
+
+  it("recordGenerationSurplus adds (L2 − L1) to the accumulator", () => {
+    // Fast generation: L1=2s, L2=5s → D=+3s (positive surplus)
+    recordGenerationSurplus(2000, 5000);
+    expect(surplus()).toBe(3000);
+    recordGenerationSurplus(2000, 5000);
+    expect(surplus()).toBe(6000);
+  });
+
+  it("accepts negative per-unit D (slow generation) and the accumulator goes negative", () => {
+    // Slow generation: L1=8s, L2=5s → D=−3s. This represents the
+    // engine falling behind, which we don't act on but we do track.
+    recordGenerationSurplus(8000, 5000);
+    expect(surplus()).toBe(-3000);
+  });
+
+  it("ignores non-finite inputs (defensive)", () => {
+    recordGenerationSurplus(NaN, 5000);
+    recordGenerationSurplus(2000, Infinity);
+    expect(surplus()).toBe(0);
+  });
+});
+
+describe("consumeGenerationSurplusPause", () => {
+  beforeEach(() => {
+    resetGenerationSurplus();
+  });
+
+  it("does not sleep when ΣD is below the threshold", async () => {
+    recordGenerationSurplus(2000, 5000); // +3s
+    recordGenerationSurplus(2000, 5000); // +6s total
+    const A = 60_000;
+    const t0 = Date.now();
+    await consumeGenerationSurplusPause(A);
+    expect(Date.now() - t0).toBeLessThan(50); // effectively instant
+    // ΣD is preserved when below the threshold (we don't touch it).
+    expect(getEngineState().generationSurplusMs).toBe(6000);
+  });
+
+  it("sleeps (ΣD − A/2) ms and resets when ΣD exceeds A", async () => {
+    // Build ΣD = 90s, A = 60s. Expected sleep ≈ 60s (90 − 30).
+    // For the test, scale it down so the wall-clock wait is short:
+    // ΣD = 9000, A = 6000 → sleep ≈ 6000ms.
+    for (let i = 0; i < 9; i++) {
+      recordGenerationSurplus(0, 1000); // +1s each
+    }
+    expect(getEngineState().generationSurplusMs).toBe(9000);
+    const A = 6000;
+    const expectedSleep = 9000 - A / 2; // 6000
+    const t0 = Date.now();
+    await consumeGenerationSurplusPause(A);
+    const elapsed = Date.now() - t0;
+    // Allow generous slack for CI scheduling jitter (timer resolution
+    // on Windows is ~15ms, plus a 250ms margin is plenty).
+    expect(elapsed).toBeGreaterThanOrEqual(expectedSleep - 50);
+    expect(elapsed).toBeLessThan(expectedSleep + 500);
+    // Accumulator is reset after the sleep.
+    expect(getEngineState().generationSurplusMs).toBe(0);
+  });
+
+  it("returns instantly and resets when A is 0 (feature disabled)", async () => {
+    getEngineState().generationSurplusMs = 999_999;
+    const t0 = Date.now();
+    await consumeGenerationSurplusPause(0);
+    expect(Date.now() - t0).toBeLessThan(20);
+    expect(getEngineState().generationSurplusMs).toBe(0);
+  });
+
+  it("returns instantly and resets when A is negative", async () => {
+    getEngineState().generationSurplusMs = 999_999;
+    const t0 = Date.now();
+    await consumeGenerationSurplusPause(-1000);
+    expect(Date.now() - t0).toBeLessThan(20);
+    expect(getEngineState().generationSurplusMs).toBe(0);
+  });
+
+  it("does not sleep when ΣD equals A exactly (strict >)", async () => {
+    for (let i = 0; i < 6; i++) {
+      recordGenerationSurplus(0, 1000); // ΣD = 6000
+    }
+    const t0 = Date.now();
+    await consumeGenerationSurplusPause(6000); // ΣD === A, not > A
+    expect(Date.now() - t0).toBeLessThan(20);
+    // ΣD is preserved at the boundary (it didn't get drained).
+    expect(getEngineState().generationSurplusMs).toBe(6000);
+  });
+});
+
+describe("WAV-surplus wiring (recordGenerationSurplus on a parsed buffer)", () => {
+  // This is the end-to-end test of the comfyui → live-engine path:
+  // parse a real PCM WAV header, then feed the resulting (L1, L2)
+  // into recordGenerationSurplus. We use the real parseWavDurationMs
+  // (not mocked) so a regression in either piece surfaces here.
+  it("a 1-second WAV with L1=200ms accumulates +800ms of surplus", async () => {
+    const { parseWavDurationMs } = await import("../lib/audio/wav-duration");
+    // 1 second, 16-bit mono 44.1kHz PCM = 88200 bytes of data.
+    const header = Buffer.alloc(12 + 8 + 16 + 8);
+    header.write("RIFF", 0);
+    header.writeUInt32LE(36 + 88200, 4);
+    header.write("WAVE", 8);
+    header.write("fmt ", 12);
+    header.writeUInt32LE(16, 16);
+    header.writeUInt16LE(1, 20); // PCM
+    header.writeUInt16LE(1, 22); // numChannels
+    header.writeUInt32LE(44_100, 24); // sampleRate
+    header.writeUInt32LE(44_100 * 2, 28); // byteRate
+    header.writeUInt16LE(2, 32); // blockAlign
+    header.writeUInt16LE(16, 34); // bitsPerSample
+    header.write("data", 36);
+    header.writeUInt32LE(88200, 40);
+
+    const L2 = parseWavDurationMs(header);
+    expect(L2).not.toBeNull();
+    expect(L2!).toBeCloseTo(1000, 1);
+    recordGenerationSurplus(200, L2!);
+    expect(getEngineState().generationSurplusMs).toBeCloseTo(800, 1);
+  });
+});
+
+describe("self-throttle application point (LLM, not TTS)", () => {
+  // The migration moved consumeGenerationSurplusPause() from
+  // processNextUnit() to generateNextSegment(). This suite locks that
+  // in: the accumulator must be drained by the LLM-stage call (no
+  // TTS work needed), and a TTS-only flow (no LLM call) must not
+  // touch the accumulator on its own.
+  beforeEach(() => {
+    resetGenerationSurplus();
+  });
+
+  it("generateNextSegment consumes ΣD when starting an LLM segment, with no TTS work involved", async () => {
+    const s = getEngineState();
+    s.liveEngineRunning = true;
+    s.shouldStop = false;
+    // Engine must NOT be in a pause state, otherwise generateNextSegment
+    // early-returns at the pauseCheck() guard before reaching the
+    // surplus pause.
+    s.playingClients.add("client-A");
+    s.lastKnownOnline = 1;
+    // Prevent the 5s poller from clobbering our state during the
+    // ~1.5s sleep window — it can fire between start() and the wait.
+    if (s.onlineStatsInterval) {
+      clearInterval(s.onlineStatsInterval);
+      s.onlineStatsInterval = null;
+    }
+
+    // Tight threshold so the test stays fast: ΣD = 1500ms > A = 200ms
+    // → expected sleep ≈ 1400ms (ΣD − A/2). Round up the wait to 1700ms
+    // for CI jitter on Windows (timer resolution ~15ms).
+    const A = 200;
+    getAudioBufferConfigMock.mockResolvedValue({
+      prebufferMode: "sentences",
+      prebufferSentences: 3,
+      prebufferGroupSize: 3,
+      prebufferSeconds: 0,
+      pauseThresholdMs: A,
+    });
+
+    // ΣD = 1500ms (3 × +500)
+    recordGenerationSurplus(0, 500);
+    recordGenerationSurplus(0, 500);
+    recordGenerationSurplus(0, 500);
+    expect(getEngineState().generationSurplusMs).toBe(1500);
+
+    // theme returns null so generateNextSegment bails AFTER the
+    // surplus pause, BEFORE startRoundTTS / processNextUnit /
+    // submitOmniVoiceJob are ever reached. This isolates the LLM-stage
+    // call: if the throttle were still wired into processNextUnit, the
+    // accumulator would survive untouched here.
+    prismaMock.theme.findFirst.mockResolvedValue(null);
+
+    liveEngine.start({});
+
+    // Wait long enough for the ~1400ms sleep + post-pause theme fetch.
+    await new Promise((r) => setTimeout(r, 1700));
+
+    // The accumulator was drained — proves consumeGenerationSurplusPause
+    // ran on this code path.
+    expect(getEngineState().generationSurplusMs).toBe(0);
+    // And TTS was never invoked — proves the drain happened at the LLM
+    // stage (theme returned null, so no round was created).
+    expect(submitOmniVoiceJobSpy).not.toHaveBeenCalled();
+    // Theme was fetched — proves generateNextSegment ran past the pause.
+    expect(prismaMock.theme.findFirst).toHaveBeenCalled();
   });
 });

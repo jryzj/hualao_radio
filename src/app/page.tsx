@@ -28,6 +28,11 @@ interface AudioBufferCfg {
   prebufferSeconds: number;
   prebufferMode: "sentences" | "seconds" | "both" | "group" | "paragraph";
   prebufferGroupSize: number;
+  // Mirrors the server-side AudioBufferConfig. The client doesn't act
+  // on this value — it just needs the type to match the GET
+  // /api/audio-buffer payload after the engine gained the
+  // generation-surplus self-throttle.
+  pauseThresholdMs: number;
 }
 
 type DisplayThemeId = "cyber" | "mist";
@@ -43,6 +48,7 @@ const DEFAULT_BUFFER_CFG: AudioBufferCfg = {
   prebufferSeconds: 8,
   prebufferMode: "sentences",
   prebufferGroupSize: 3,
+  pauseThresholdMs: 60_000,
 };
 
 const ENTERED_KEY = "radioai.entered";

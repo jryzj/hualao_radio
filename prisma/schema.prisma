@@ -84,6 +84,11 @@ model AudioBufferConfig {
   prebufferSeconds   Int      @default(8)
   prebufferMode      String   @default("sentences")
   prebufferGroupSize Int      @default(3)
+  // Generation-surplus threshold for the live engine's self-throttle.
+  // When Σ(L2 − L1) across recent TTS units exceeds this value, the
+  // engine sleeps (ΣD − A/2) ms before pulling the next LLM segment
+  // (the upstream throttle point). 0 disables it.
+  pauseThresholdMs   Int      @default(60000)
   updatedAt          DateTime @updatedAt
 }
 

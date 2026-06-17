@@ -2,8 +2,8 @@
 import { useEffect, useState } from "react";
 
 export default function ConfigPage() {
-  const [data, setData] = useState<{ llm: Record<string, string> | null; comfyui: Record<string, string> | null; moderationPrompt: string | null; audioBuffer: { prebufferSentences: number; prebufferSeconds: number; prebufferMode: string; prebufferGroupSize: number } | null }>({ llm: null, comfyui: null, moderationPrompt: null, audioBuffer: null });
-  const [form, setForm] = useState({ apiUrl: "", apiKey: "", modelName: "", serverUrl: "", comfyuiToken: "", webhookUrl: "", pollTimeoutMs: "", moderationPrompt: "", prebufferSentences: "", prebufferSeconds: "", prebufferMode: "sentences", prebufferGroupSize: "3" });
+  const [data, setData] = useState<{ llm: Record<string, string> | null; comfyui: Record<string, string> | null; moderationPrompt: string | null; audioBuffer: { prebufferSentences: number; prebufferSeconds: number; prebufferMode: string; prebufferGroupSize: number; pauseThresholdMs: number } | null }>({ llm: null, comfyui: null, moderationPrompt: null, audioBuffer: null });
+  const [form, setForm] = useState({ apiUrl: "", apiKey: "", modelName: "", serverUrl: "", comfyuiToken: "", webhookUrl: "", pollTimeoutMs: "", moderationPrompt: "", prebufferSentences: "", prebufferSeconds: "", prebufferMode: "sentences", prebufferGroupSize: "3", pauseThresholdMs: "60000" });
 
   useEffect(() => {
     fetch("/api/admin/config").then(r => r.json()).then(d => {
@@ -24,6 +24,7 @@ export default function ConfigPage() {
         prebufferSeconds: d.audioBuffer?.prebufferSeconds?.toString() ?? "8",
         prebufferMode: d.audioBuffer?.prebufferMode ?? "sentences",
         prebufferGroupSize: d.audioBuffer?.prebufferGroupSize?.toString() ?? "3",
+        pauseThresholdMs: d.audioBuffer?.pauseThresholdMs?.toString() ?? "60000",
       });
     });
   }, []);
@@ -42,6 +43,7 @@ export default function ConfigPage() {
           prebufferSeconds: parseInt(form.prebufferSeconds) || 8,
           prebufferMode: form.prebufferMode,
           prebufferGroupSize: parseInt(form.prebufferGroupSize) || 3,
+          pauseThresholdMs: parseInt(form.pauseThresholdMs) || 60000,
         },
       }),
     });
@@ -115,6 +117,10 @@ export default function ConfigPage() {
             <input className={inputClass} placeholder="组大小" value={form.prebufferGroupSize} onChange={e => setForm({ ...form, prebufferGroupSize: e.target.value })} />
           </div>
         )}
+        <div className="mb-4">
+          <label className={labelClass}>LLM 生成过快暂停阈值 A（毫秒，累计 Σ(L2−L1) 超过此值时服务器暂停 LLM 内容生成；0 关闭）</label>
+          <input className={inputClass} placeholder="60000" value={form.pauseThresholdMs} onChange={e => setForm({ ...form, pauseThresholdMs: e.target.value })} />
+        </div>
 
         <button type="submit">保存配置</button>
       </form>

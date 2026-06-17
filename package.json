@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && next build && node scripts/fix-safari14-build.mjs && node scripts/verify-safari14-build.mjs",
+    "build": "cross-env NEXT_PRIVATE_PARALLEL_TURBOPACK_WORKERS=2 NODE_OPTIONS=--max-old-space-size=8192 prisma generate && next build && node scripts/fix-safari14-build.mjs && node scripts/verify-safari14-build.mjs",
     "migrate": "node scripts/migrate-with-retry.cjs",
     "prestart": "node scripts/migrate-with-retry.cjs",
     "start": "next start",
@@ -36,6 +36,7 @@
     "@types/react-dom": "^19",
     "@types/turndown": "^5.0.6",
     "@types/ws": "^8.18.1",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.2.6",
     "jest": "^30.4.2",

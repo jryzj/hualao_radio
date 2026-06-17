@@ -1,5 +1,7 @@
 import { getComfyUIConfig } from "@/config";
 import { prisma } from "@/lib/prisma";
+import { recordGenerationSurplus } from "@/lib/live-engine";
+import { parseWavDurationMs } from "@/lib/audio/wav-duration";
 import fs from "fs";
 import path from "path";
 
@@ -50,6 +52,12 @@ export async function submitOmniVoiceJob(
   text: string,
 ): Promise<string | null> {
   console.log('[comfyui] submitOmniVoiceJob called with text:', text.substring(0, 30));
+  // L1 start: the moment the engine asks us to produce this segment.
+  // L1 end is captured inside broadcastAudioNode, just before the
+  // wsBroadcast call. (L2 − L1) is fed into the live-engine's
+  // generation-surplus accumulator so it can self-throttle when LLM
+  // + TTS is consistently faster than the client can consume.
+  const submittedAt = Date.now();
   const config = await getComfyUIConfig();
   if (!config) return null;
 
@@ -163,7 +171,7 @@ export async function submitOmniVoiceJob(
     const entry = await pollHistory(promptId, config.serverUrl, config.comfyuiToken, timeoutMs);
     if (!entry || globalState.shouldStop) return promptId;
 
-    await broadcastAudioNode(entry, config);
+    await broadcastAudioNode(entry, config, submittedAt);
     return promptId;
   } catch (e) {
     console.error('[comfyui] submitOmniVoiceJob error:', e);
@@ -171,7 +179,11 @@ export async function submitOmniVoiceJob(
   }
 }
 
-async function broadcastAudioNode(entry: Record<string, unknown>, config: NonNullable<Awaited<ReturnType<typeof getComfyUIConfig>>>) {
+async function broadcastAudioNode(
+  entry: Record<string, unknown>,
+  config: NonNullable<Awaited<ReturnType<typeof getComfyUIConfig>>>,
+  submittedAt?: number,
+) {
   const outputs = entry["outputs"] as Record<string, unknown> | undefined;
   if (!outputs) return;
   const node2Output = outputs["2"] as Record<string, unknown> | undefined;
@@ -184,6 +196,22 @@ async function broadcastAudioNode(entry: Record<string, unknown>, config: NonNul
     const res = await fetch(viewUrl, { headers: comfyHeaders(config.comfyuiToken) });
     if (res.ok) {
       const audioBuffer = Buffer.from(await res.arrayBuffer());
+      // L1 end: the audio is fully downloaded and is about to be
+      // pushed to clients. Report (L2 − L1) to the engine's
+      // surplus accumulator so it can self-throttle when the
+      // server outpaces the player. parseWavDurationMs returns null
+      // for non-WAV / non-PCM blobs (defensive — omni-voice always
+      // produces PCM WAV, but we don't want to crash if the
+      // workflow changes).
+      if (typeof submittedAt === "number") {
+        const L1 = Date.now() - submittedAt;
+        const L2 = parseWavDurationMs(audioBuffer);
+        if (L2 !== null) {
+          recordGenerationSurplus(L1, L2);
+        } else {
+          console.warn('[comfyui] could not parse WAV duration from segment; skipping surplus update');
+        }
+      }
       const base64 = audioBuffer.toString('base64');
       await import("@/lib/ws-server").then(m => m.wsBroadcast(base64));
       console.log('[comfyui] broadcast sentence, size:', audioBuffer.length);

@@ -96,6 +96,7 @@ export async function PUT(req: NextRequest) {
       prebufferSeconds: 8,
       prebufferMode: "sentences" as const,
       prebufferGroupSize: 3,
+      pauseThresholdMs: 60000,
     };
     await setAudioBufferConfig({
       prebufferSentences:
@@ -114,6 +115,10 @@ export async function PUT(req: NextRequest) {
         typeof body.audioBuffer.prebufferGroupSize === "number"
           ? body.audioBuffer.prebufferGroupSize
           : existing.prebufferGroupSize,
+      pauseThresholdMs:
+        typeof body.audioBuffer.pauseThresholdMs === "number"
+          ? body.audioBuffer.pauseThresholdMs
+          : existing.pauseThresholdMs,
     });
   }
 

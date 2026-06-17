@@ -71,6 +71,17 @@ const nextConfig: NextConfig = {
     "172.30.*.*",
     "172.31.*.*",
   ],
+  // Native modules (libsql ships a .node binding) must NOT be bundled
+  // by Turbopack. When they are, build-time "Collecting page data"
+  // workers try to require the hash-bundled external module on Windows
+  // and fail with "Failed to load external module @libsql/client-…",
+  // cascading into Zone OOM across the 19 worker processes. Keeping
+  // these as Node-resolved externals makes `next build` match `next
+  // dev` behavior for the DB layer.
+  serverExternalPackages: [
+    "@libsql/client",
+    "@prisma/adapter-libsql",
+  ],
   async headers() {
     return [
       {
