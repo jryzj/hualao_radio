@@ -80,11 +80,19 @@ export function recordGenerationSurplus(L1Ms: number, L2Ms: number): void {
 
 // Called from generateNextSegment() before pulling the next LLM
 // segment. If the accumulated surplus exceeds the threshold A, sleep
-// (ΣD − A/2) ms (leaving a safety margin of A/2 below the trigger so
-// we don't re-fire on the very next segment), then reset the
-// accumulator. This is the upstream application point — throttling
-// here naturally also stops new TTS work, since no new text means no
-// new audio units to submit.
+// (ΣD − A/2) ms and leave A/2 in the accumulator as headroom so the
+// next segment doesn't immediately re-trigger.
+//
+// The headroom matters: per-segment d = L2 − L1 is the TTS-time-saved
+// per segment, but the server-side wall-clock per segment is also
+// LLM_time + L1 (LLM is invisible to L1 today — see comment on
+// recordGenerationSurplus). For server pacing to match client
+// consumption, the steady-state sleep per segment must equal d. The
+// previous version reset ΣD to 0 after every sleep, which combined
+// with the − A/2 offset to make each cycle land at L1 + (d − A/2)
+// instead of L1 + d — i.e. the server outpaced the client by A/2 per
+// segment forever, growing the client buffer unboundedly. Leaving A/2
+// in the accumulator restores exact pacing at any A > 0.
 //
 // A <= 0 disables the feature entirely — useful for emergency
 // "pause-the-throttle" toggles and for the existing tests that
@@ -100,7 +108,11 @@ export function consumeGenerationSurplusPause(A: number): Promise<void> {
   console.log(
     `[LiveEngine] generation surplus ${Math.round(D)}ms > threshold ${A}ms, pausing ${Math.round(wait)}ms`,
   );
-  globalState.generationSurplusMs = 0;
+  // Keep A/2 as headroom for the next segment instead of clearing to
+  // 0. The math: a fresh segment adds d to D (going A/2 → A/2 + d),
+  // sleep drains it back to A/2. So per-segment sleep converges to d,
+  // making the server cycle (L1 + d) equal the client cycle (L2).
+  globalState.generationSurplusMs = A / 2;
   return new Promise((r) => setTimeout(r, wait));
 }
 
