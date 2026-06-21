@@ -165,10 +165,17 @@ export function WakeLockIndicator({ status, isPlaying }: Props) {
         onClick={onClick}
         aria-label={text}
         title={text}
+        // iOS 14.6 touch-event fix: backdrop-blur on a hit-test
+        // target can swallow the first tap (GPU-compositor quirk),
+        // and the parent container's z-50 does NOT propagate to
+        // static children. Mirrors the pattern on the FAB stack
+        // buttons in page.tsx — see EnterOverlay.tsx:1249 for the
+        // canonical documentation.
+        style={{ position: "relative", zIndex: 1 }}
         className={`fixed right-4 bottom-[max(72px,env(safe-area-inset-bottom,72px))]
                    z-50 flex items-center gap-1.5 rounded-full border
                    bg-[rgba(13,13,24,0.92)] px-2.5 py-1 text-xs
-                   backdrop-blur-[6px] pointer-events-auto
+                   pointer-events-auto
                    max-w-[calc(100vw-32px)] ${cls}`}
       >
         <svg

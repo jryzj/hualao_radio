@@ -1802,11 +1802,17 @@ export default function Home() {
             audioRef.current?.play().catch(() => {});
             setReprimeToastVisible(false);
           }}
+          // iOS 14.6 touch-event fix: same as WakeLockIndicator pill —
+          // backdrop-blur on a hit-test target swallows the first
+          // tap. Drop the blur (the 92% opaque background already
+          // gives the visual) and give the button its own stacking
+          // context so a sibling composited layer can't reorder it.
+          style={{ position: "relative", zIndex: 1 }}
           className="fixed bottom-[max(80px,calc(60px+env(safe-area-inset-bottom,0px)))]
                      left-1/2 z-[65] -translate-x-1/2 cursor-pointer
                      rounded-full border border-[rgba(140,160,255,0.3)]
                      bg-[rgba(13,13,24,0.92)] px-4 py-2 text-sm
-                     backdrop-blur-[6px] text-[#e0e2ff] transition-opacity hover:opacity-90"
+                     text-[#e0e2ff] transition-opacity hover:opacity-90"
           aria-label="音频被其他应用暂停，点此恢复"
         >
           音频被其他应用暂停，点此恢复
