@@ -7,8 +7,11 @@ import { MessageInputDrawer } from "@/components/MessageInputDrawer";
 import { MessageWallPanel } from "@/components/MessageWallPanel";
 import { EnterOverlay } from "@/components/EnterOverlay";
 import { IosInstallHint } from "@/components/IosInstallHint";
+import { WebViewAudioHint } from "@/components/WebViewAudioHint";
+import { WakeLockIndicator } from "@/components/WakeLockIndicator";
 import { wsBaseUrl } from "@/lib/ws-url";
 import { useWakeLock } from "@/lib/wake-lock";
+import { addLifecycleListeners } from "@/lib/page-lifecycle";
 import { useRecordVisit } from "@/hooks/useRecordVisit";
 import { cn } from "@/lib/cn";
 
@@ -56,6 +59,11 @@ const DISPLAY_THEME_KEY = "radioai.displayTheme";
 const SILENT_WAV_DATA_URI =
   "data:audio/wav;base64,UklGRlQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YTAAAAAA";
 const CLIENT_ID_KEY = "radioai.clientId";
+// Persisted across cold starts (process killed by OEM / force-quit +
+// reopen). Set "1" when startPlayback succeeds, "0" in stopPlayback.
+// Read on mount to recover user intent and on `pageshow` to drive
+// the cold-start recovery path.
+const DESIRED_PLAYBACK_KEY = "radioai.desiredPlayback";
 
 const DISPLAY_THEME_OPTIONS: DisplayThemeOption[] = [
   {
@@ -87,6 +95,28 @@ function getOrCreateClientId(): string {
     window.localStorage.setItem(CLIENT_ID_KEY, id);
   }
   return id;
+}
+
+// Persist user playback intent across cold starts (process killed by
+// OEM aggressive battery saver, force-quit, browser crash). Read on
+// mount; written by startPlayback / stopPlayback.
+function readDesiredPlayback(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(DESIRED_PLAYBACK_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeDesiredPlayback(value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(DESIRED_PLAYBACK_KEY, value ? "1" : "0");
+  } catch {
+    // Private mode / disabled storage — ignore; the in-memory ref
+    // still tracks intent for the current session.
+  }
 }
 
 function detectAudioMime(bytes: Uint8Array): string {
@@ -156,6 +186,17 @@ export default function Home() {
   const bufferCfgRef = useRef<AudioBufferCfg>(DEFAULT_BUFFER_CFG);
   useEffect(() => { bufferCfgRef.current = bufferCfg; }, [bufferCfg]);
 
+  // Rehydrate the persisted "user wants playback" intent on mount.
+  // We deliberately do NOT auto-call startPlayback() here — the
+  // AudioContext needs a user gesture to resume, and a fresh page
+  // load has none. The actual cold-start recovery attempt happens
+  // in the `pageshow` handler below, which fires after the page
+  // surface is ready and the user has interacted with the device
+  // enough for AudioContext.resume() to succeed.
+  useEffect(() => {
+    desiredPlaybackRef.current = readDesiredPlayback();
+  }, []);
+
   // === Enter overlay (user-gesture required) ===
   const [hasEntered, setHasEntered] = useState(false);
   const [showEnter, setShowEnter] = useState(false);
@@ -176,6 +217,28 @@ export default function Home() {
 
   // === Audio element + AudioContext + AnalyserNode ===
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  // Background media-session keepalive: a hidden <video> playing a
+  // 1fps canvas.captureStream keeps the browser treating this tab as
+  // "active media", independent of whether Wake Lock API is available.
+  // Pairs with src/lib/wake-lock.ts: Wake Lock keeps the screen on
+  // when supported; this video is the fallback when it's not (some
+  // Android Edge / WebView builds have no navigator.wakeLock).
+  const keepaliveVideoRef = useRef<HTMLVideoElement | null>(null);
+  // The keepalive <video> gets a combined MediaStream with BOTH a
+  // video track (canvas.captureStream) and an audio track (silent
+  // OscillatorNode routed to MediaStreamDestination). A video element
+  // with both tracks active is the strongest "active media" signal
+  // Chromium / Edge / iOS Safari recognize — stronger than either
+  // track alone, especially on Android Edge which aggressively
+  // freezes tabs with single-track keepalives.
+  // `videoReadyRef` is set to true once srcObject is attached in
+  // ensureAudioReady. The isPlaying effect below only calls play()
+  // when both `isPlaying` and `videoReadyRef.current` are true —
+  // guards against the race where the effect fires before setup
+  // completes (play() on a srcObject-less element throws
+  // NotSupportedError). `isPlayingRef` already exists further down
+  // for the same purpose in other code paths; we reuse it here.
+  const videoReadyRef = useRef(false);
   const audioCtxRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const audioGainRef = useRef<GainNode | null>(null);
@@ -183,6 +246,19 @@ export default function Home() {
 
   // === Playback state ===
   const [isPlaying, setIsPlaying] = useState(false);
+  // Surfaces a one-shot "音频被其他应用暂停，点此恢复" toast when the
+  // pause re-prime (audio.play() triggered by `pause` event) fails 3
+  // times within 5s. Reset by the toast's onClick handler or by the
+  // 8s auto-dismiss timer.
+  const [reprimeToastVisible, setReprimeToastVisible] = useState(false);
+  // Auto-dismiss the toast after 8s so it doesn't linger forever if
+  // the user walks away. The cleanup clears the timer so a re-arm
+  // (e.g. another failure burst) starts a fresh 8s window.
+  useEffect(() => {
+    if (!reprimeToastVisible) return;
+    const id = window.setTimeout(() => setReprimeToastVisible(false), 8000);
+    return () => window.clearTimeout(id);
+  }, [reprimeToastVisible]);
   const [connected, setConnected] = useState(false);
   const [volume, setVolume] = useState(0.8);
   const volumeRef = useRef(volume);
@@ -196,6 +272,12 @@ export default function Home() {
   const isPlayingRef = useRef(false);
   const webAudioSourceRef = useRef<AudioBufferSourceNode | null>(null);
   const playNextRef = useRef<() => void>(() => {});
+  // startPlayback is declared further down (line ~1300) but referenced
+  // earlier in the `pageshow` handler for cold-start recovery. Mirrors
+  // the playNextRef pattern: a stable handle the early effects can
+  // capture without taking a forward reference to `startPlayback`
+  // itself (TypeScript would flag the temporal dead zone).
+  const startPlaybackRef = useRef<(() => Promise<void>) | null>(null);
   const desiredPlaybackRef = useRef(false);
   const hasStartedRef = useRef(false);
   const currentUrlRef = useRef<string | null>(null);
@@ -207,6 +289,24 @@ export default function Home() {
   // proxy timeout, iOS background→foreground) heals on its own.
   const audioSocketRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const audioSocketBackoffRef = useRef(1000);
+  // Refs to the latest connectAudioSocket callback and the most
+  // recent themeId used to open the audio WS. The visibilitychange
+  // force-reconnect effect (added below) reads these instead of
+  // taking a forward reference to connectAudioSocket (declared ~900
+  // lines further down — same pattern as playNextRef /
+  // startPlaybackRef).
+  const connectAudioSocketRef = useRef<((themeId: string) => void) | null>(null);
+  const currentThemeIdRef = useRef<string | null>(null);
+  // Audio WS heartbeat / watchdog — see connectAudioSocket. The
+  // watchdog is what actually catches silent drops today (no
+  // message of any kind for 60s → force-close → existing onclose
+  // retry loop). The heartbeat ping is forward-looking for a
+  // server that echoes it; the current server ignores it, but
+  // sending it costs nothing. Both refs are torn down in onclose
+  // AND in stopPlayback so a PLAY→STOP→PLAY cycle can't leak a
+  // timer that fires against the wrong socket.
+  const audioSocketHeartbeatRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const audioSocketWatchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldAutoStartRef = useRef(false); // try to autostart once entered
 
   // === Messages ===
@@ -302,6 +402,23 @@ export default function Home() {
       const ctx = new Ctx();
       await ctx.resume();
       audioCtxRef.current = ctx;
+      // Web Audio API quirk: the context can drift to `suspended`
+      // mid-playback (iOS background restore, aggressive Android
+      // WebView battery savers, audio-focus loss on another tab).
+      // Without a listener, audio goes silent until the next user
+      // gesture. We arm a statechange watcher that calls resume()
+      // whenever we drift away from `running`. The listener is
+      // attached exactly once because the surrounding
+      // `if (audioCtxRef.current)` early-return above short-
+      // circuits any second call to ensureAudioReady.
+      ctx.addEventListener("statechange", () => {
+        if (ctx.state === "suspended") {
+          console.warn("[audio-ctx] suspended, attempting resume");
+          ctx.resume().catch((err: unknown) => {
+            console.warn("[audio-ctx] resume failed:", err);
+          });
+        }
+      });
 
       const analyserNode = ctx.createAnalyser();
       analyserNode.fftSize = 256;
@@ -341,6 +458,90 @@ export default function Home() {
           if (prevSrc) audioRef.current.src = prevSrc;
         }
         audioPrimedRef.current = true;
+      }
+      // Background media-session keepalive: silently play a
+      // stream-backed <video> so the browser keeps this tab marked
+      // "active media" even when Wake Lock API is unavailable.
+      //
+      // The stream carries BOTH a video track (2x2 canvas) and an
+      // audio track (silent OscillatorNode via MediaStreamDestination).
+      // A <video> element with both tracks active is the strongest
+      // active-media signal Chromium recognizes — single-track
+      // keepalives (audio-only OR video-only) were insufficient on
+      // the user's Edge Android 16 (see plan-history). Muted +
+      // autoplay is allowed without gesture.
+      //
+      // NOTE: do NOT await play() here. The earlier design called
+      // `await video.play()` after attaching srcObject, but the
+      // isPlaying effect below fires v.pause() during setup (because
+      // isPlaying is still false at this point — user hasn't clicked
+      // PLAY yet), which aborts the in-flight play promise with
+      // AbortError. Now setup only attaches the stream; the isPlaying
+      // effect is the canonical play/pause trigger. videoReadyRef
+      // gates the effect so play() never runs before srcObject exists.
+      console.log(
+        "[keepalive-video] ref:",
+        keepaliveVideoRef.current ? "mounted" : "null",
+      );
+      if (
+        keepaliveVideoRef.current &&
+        audioCtxRef.current
+      ) {
+        try {
+          const canvas = document.createElement("canvas");
+          canvas.width = 2;
+          canvas.height = 2;
+          console.log("[keepalive-video] canvas created");
+          const videoStream = canvas.captureStream(1);
+          console.log(
+            "[keepalive-video] video stream captured:",
+            videoStream ? "ok" : "null",
+          );
+
+          // Audio track: silent oscillator wired to MediaStreamDestination.
+          // frequency=0 + gain=0 → real PCM zero samples, not empty
+          // buffer (browsers won't optimize an empty buffer away, but
+          // will play actual zero samples through the audio pipeline).
+          const audioDest =
+            audioCtxRef.current.createMediaStreamDestination();
+          const osc = audioCtxRef.current.createOscillator();
+          const gain = audioCtxRef.current.createGain();
+          gain.gain.value = 0;
+          osc.frequency.value = 0;
+          osc.connect(gain).connect(audioDest);
+          osc.start();
+          console.log(
+            "[keepalive-video] audio track created:",
+            audioDest.stream.getAudioTracks().length,
+            "track(s)",
+          );
+
+          const combinedStream = new MediaStream([
+            ...videoStream.getVideoTracks(),
+            ...audioDest.stream.getAudioTracks(),
+          ]);
+          console.log(
+            "[keepalive-video] combined stream:",
+            combinedStream.getVideoTracks().length,
+            "video +",
+            combinedStream.getAudioTracks().length,
+            "audio",
+          );
+
+          keepaliveVideoRef.current.srcObject = combinedStream;
+          keepaliveVideoRef.current.muted = true;
+          videoReadyRef.current = true;
+          console.log("[keepalive-video] srcObject attached, ready");
+          // If audio is already playing (race: user clicked PLAY
+          // before setup completed), start the video immediately so
+          // we don't wait for the next isPlaying effect run.
+          if (isPlayingRef.current) {
+            keepaliveVideoRef.current.play().catch(() => {});
+            console.log("[keepalive-video] catch-up play()");
+          }
+        } catch (err) {
+          console.warn("[keepalive-video] failed:", err);
+        }
       }
       return true;
     } catch (err) {
@@ -628,7 +829,100 @@ export default function Home() {
   //     signals go false on explicit stopPlayback, so the screen still
   //     dims once the user stops. See src/lib/wake-lock.ts for the
   //     platform support matrix. ===
-  useWakeLock(isPlaying || connected || bufferStatus.ready);
+  const { status: wakeLockStatus, refresh: refreshWakeLock } = useWakeLock(
+    isPlaying || connected || bufferStatus.ready,
+  );
+
+  // === Layer 5: page-lifecycle freeze/resume re-arm ===
+  //
+  // The Wake Lock API spec requires the browser to release the
+  // sentinel when the page is hidden. Our `useWakeLock` hook
+  // re-acquires on `visibilitychange` → visible, which covers the
+  // common case. But on iOS PWA, background→foreground transitions
+  // sometimes fire the Page-Lifecycle API `resume` event WITHOUT a
+  // corresponding `visibilitychange`, leaving the sentinel in a
+  // stale-released state until the user backgrounds and re-foregrounds
+  // the tab a second time. `refreshWakeLock` calls the LATEST
+  // `acquire` closure from `useWakeLock` to force a re-acquire
+  // attempt on every `resume`, regardless of whether visibility also
+  // flipped.
+  //
+  // The `freeze` event is intentionally not handled: the browser
+  // releases the sentinel on its own when the page freezes, so the
+  // only thing we need on `freeze` is to do nothing.
+  useEffect(() => {
+    const remove = addLifecycleListeners({
+      onResume: () => {
+        console.log(
+          "[page-lifecycle] resume, refreshing wake lock sentinel",
+        );
+        refreshWakeLock();
+      },
+    });
+    return remove;
+  }, [refreshWakeLock]);
+
+  // === WS force-reconnect on visibility return ===
+  //
+  // When Android locks the screen (or any other foreground→background
+  // transition), the JS context may be suspended and the audio WS
+  // connection torn down by the OS / NAT. When the user unlocks,
+  // JS resumes but the pending reconnect timer might still be in
+  // its exponential-backoff window (up to 15s). For an audio stream
+  // that's a noticeable dead-air gap, so we force-reconnect
+  // immediately when:
+  //   - visibility flips back to "visible"
+  //   - the user still wants playback (desiredPlaybackRef)
+  //   - the WS is actually down (CLOSED / CLOSING / null —
+  //     CONNECTING is left alone since the existing retry will
+  //     resolve it)
+  // and reset the backoff schedule so the next drop starts fresh.
+  useEffect(() => {
+    const remove = addLifecycleListeners({
+      onVisible: () => {
+        if (!desiredPlaybackRef.current) return;
+        const ws = socketRef.current;
+        const isDown =
+          !ws ||
+          ws.readyState === WebSocket.CLOSED ||
+          ws.readyState === WebSocket.CLOSING;
+        if (!isDown) return;
+        console.log(
+          "[page-lifecycle] visible + playing + WS down, force-reconnecting",
+        );
+        // Cancel any pending backoff retry so we don't double-reconnect.
+        if (audioSocketRetryRef.current) {
+          clearTimeout(audioSocketRetryRef.current);
+          audioSocketRetryRef.current = null;
+        }
+        // Reset backoff so the next close cycle starts fresh.
+        audioSocketBackoffRef.current = 500;
+        const themeId = currentThemeIdRef.current;
+        if (themeId) {
+          connectAudioSocketRef.current?.(themeId);
+        }
+      },
+    });
+    return remove;
+  }, []);
+
+  // Background media-session keepalive sync: when audio is playing
+  // we keep the <video> keepalive playing so the browser / OS keeps
+  // treating this tab as "active media" and the WebSocket stays open.
+  // On STOP we pause (saves CPU/battery).
+  //
+  // The `videoReadyRef` gate prevents video.play() from running before
+  // ensureAudioReady has finished attaching srcObject — which would
+  // throw a NotSupportedError on a srcObject-less element.
+  useEffect(() => {
+    const v = keepaliveVideoRef.current;
+    if (!v) return;
+    if (isPlaying && videoReadyRef.current) {
+      v.play().catch(() => {});
+    } else {
+      v.pause();
+    }
+  }, [isPlaying]);
 
   // === Visibility / page-lifecycle guard: when the screen turns off or
   //     the OS suspends the page, some browsers pause the <audio>.
@@ -646,6 +940,21 @@ export default function Home() {
       }
     };
     const onPageShow = () => {
+      // Cold-start recovery: if the user wanted playback (persisted
+      // from before the page was killed) but `isPlaying` is false
+      // (state lost with the process), run full startPlayback() to
+      // re-open the WS + set up the audio pipeline. If we are
+      // already playing (hot foreground), fall through to the
+      // existing audio.play() re-prime below.
+      if (desiredPlaybackRef.current && !isPlaying) {
+        console.log("[page-lifecycle] cold-start recovery from pageshow");
+        // Call through the ref so this handler doesn't take a
+        // forward reference to `startPlayback` (declared ~400 lines
+        // further down). startPlaybackRef is populated by a
+        // useEffect that runs on mount, before any pageshow can fire.
+        void startPlaybackRef.current?.();
+        return;
+      }
       const a = audioRef.current;
       if (!a) return;
       if (isPlaying && a.paused) {
@@ -659,6 +968,55 @@ export default function Home() {
       window.removeEventListener("pageshow", onPageShow);
     };
   }, [isPlaying]);
+
+  // Audio pause re-prime: any pause event while the user still
+  // wants playback is treated as "the OS stole audio focus",
+  // not "the user stopped". Covers the cases the visibilitychange
+  // handler above misses:
+  //   - Android MediaSession / AudioFocus loss (call, navigation,
+  //     another music app starting) — Chromium auto-pauses
+  //     <audio> but does NOT raise visibilitychange
+  //   - iOS PWA MediaSession context being revoked
+  // The `desiredPlaybackRef.current && isPlayingRef.current`
+  // guard means explicit stopPlayback() (which sets both to false
+  // BEFORE calling audio.pause()) is correctly NOT re-primed.
+  useEffect(() => {
+    if (!hasEntered) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    // Track consecutive failed re-prime attempts within a 5s window.
+    // After 3 failures, surface a "tap to resume" toast — a real user
+    // tap counts as a user gesture, which iOS requires for audio
+    // resume after Siri/FaceTime audio-session interruption, and
+    // Android benefits from the same gesture context for AudioFocus
+    // reacquisition. The timestamps array lives in the effect closure
+    // so it resets naturally across effect runs.
+    let failureTimestamps: number[] = [];
+    const onPause = () => {
+      if (
+        !desiredPlaybackRef.current ||
+        !isPlayingRef.current ||
+        !audio.paused
+      ) {
+        return;
+      }
+      audio.play().catch(() => {
+        const now = Date.now();
+        failureTimestamps = failureTimestamps.filter((t) => now - t < 5000);
+        failureTimestamps.push(now);
+        if (failureTimestamps.length >= 3) {
+          console.warn(
+            "[audio] pause re-prime failed 3x in 5s, surfacing toast",
+          );
+          setReprimeToastVisible(true);
+        }
+      });
+    };
+    audio.addEventListener("pause", onPause);
+    return () => {
+      audio.removeEventListener("pause", onPause);
+    };
+  }, [hasEntered]);
 
   const checkBufferReady = useCallback((): { ready: boolean; sentences: number; seconds: number; needed: number } => {
     const cfg = bufferCfgRef.current;
@@ -856,10 +1214,57 @@ export default function Home() {
       // Reset backoff on a successful handshake so the next failure
       // starts the backoff sequence from 1s again.
       audioSocketBackoffRef.current = 1000;
+
+      // Arm heartbeat (forward-compat ping) + watchdog (60s of
+      // silence → force-close → existing onclose retry loop).
+      // The watchdog is what actually catches silent drops today
+      // (NAT timeout, idle proxy kill, server stalled without
+      // close). The heartbeat ping is a no-op against the current
+      // server but prepares us for one that echoes it. Both are
+      // torn down in onclose and in stopPlayback.
+      if (audioSocketHeartbeatRef.current) {
+        clearInterval(audioSocketHeartbeatRef.current);
+      }
+      audioSocketHeartbeatRef.current = setInterval(() => {
+        const s = socketRef.current;
+        if (s && s.readyState === WebSocket.OPEN) {
+          try {
+            s.send(JSON.stringify({ type: "ping", t: Date.now() }));
+          } catch {
+            /* socket may have just closed; ignore */
+          }
+        }
+      }, 20_000);
+      if (audioSocketWatchdogRef.current) {
+        clearTimeout(audioSocketWatchdogRef.current);
+      }
+      audioSocketWatchdogRef.current = setTimeout(() => {
+        console.warn(
+          "[audio-ws] watchdog timeout (60s no message), forcing close",
+        );
+        const s = socketRef.current;
+        if (s && s.readyState <= WebSocket.OPEN) {
+          try {
+            s.close();
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 60_000);
     };
     socket.onclose = () => {
       setConnected(false);
       socketRef.current = null;
+      // Tear down heartbeat + watchdog so they don't fire against
+      // the closed socket (or worse, leak across reconnects).
+      if (audioSocketHeartbeatRef.current) {
+        clearInterval(audioSocketHeartbeatRef.current);
+        audioSocketHeartbeatRef.current = null;
+      }
+      if (audioSocketWatchdogRef.current) {
+        clearTimeout(audioSocketWatchdogRef.current);
+        audioSocketWatchdogRef.current = null;
+      }
       // Only retry if the user hasn't explicitly stopped playback.
       if (!desiredPlaybackRef.current) return;
       const delay = audioSocketBackoffRef.current;
@@ -880,6 +1285,28 @@ export default function Home() {
     };
     socket.onerror = () => {};
     socket.onmessage = (e) => {
+      // Re-arm watchdog: any inbound message (string control,
+      // binary audio chunk, even a ping echo) resets the 60s
+      // silent-drop timer. Without this re-arm, a steady stream
+      // of binary chunks would still trip the watchdog because
+      // it's anchored to the open event, not the most recent
+      // message.
+      if (audioSocketWatchdogRef.current) {
+        clearTimeout(audioSocketWatchdogRef.current);
+      }
+      audioSocketWatchdogRef.current = setTimeout(() => {
+        console.warn(
+          "[audio-ws] watchdog timeout (60s no message), forcing close",
+        );
+        const s = socketRef.current;
+        if (s && s.readyState <= WebSocket.OPEN) {
+          try {
+            s.close();
+          } catch {
+            /* ignore */
+          }
+        }
+      }, 60_000);
       if (typeof e.data === "string") {
         if (e.data === "flush" || e.data.startsWith('{"type":"flush"}')) {
           if (audioRef.current) {
@@ -914,14 +1341,26 @@ export default function Home() {
     };
   }, [enqueueAudioBuffer, updateBufferStatus]);
 
+  // Keep connectAudioSocketRef populated as the callback's identity
+  // changes. Mirrors the playNextRef / startPlaybackRef pattern.
+  // Placed here (after the useCallback) because the forward
+  // reference from the visibilitychange useEffect above would
+  // otherwise hit a TypeScript temporal-dead-zone error.
+  useEffect(() => {
+    connectAudioSocketRef.current = connectAudioSocket;
+  }, [connectAudioSocket]);
+
   const startPlayback = useCallback(async () => {
     if (!audioRef.current) return;
     const ready = await ensureAudioReady();
     if (!ready) return;
     const t = await fetch("/api/config").then(r => r.json()).catch(() => null);
     if (!t) return;
+    // eslint-disable-next-line react-hooks/immutability
     desiredPlaybackRef.current = true;
+    writeDesiredPlayback(true);
     audioSocketBackoffRef.current = 1000;
+    currentThemeIdRef.current = t.id;
     connectAudioSocket(t.id);
     setIsPlaying(true);
     // Tell the engine a client is now playing. fire-and-forget; the
@@ -934,6 +1373,12 @@ export default function Home() {
     }).catch(() => {});
   }, [connectAudioSocket, ensureAudioReady]);
 
+  // Keep the ref populated as `startPlayback`'s identity changes.
+  // Mirrors the playNextRef pattern at line 1055.
+  useEffect(() => {
+    startPlaybackRef.current = startPlayback;
+  }, [startPlayback]);
+
   const stopPlayback = useCallback(() => {
     // Clear any pending audio-WS retry (Fix #6) — otherwise a reconnect
     // scheduled by the previous socket's onclose would fire after the
@@ -942,7 +1387,24 @@ export default function Home() {
       clearTimeout(audioSocketRetryRef.current);
       audioSocketRetryRef.current = null;
     }
+    // Tear down heartbeat + watchdog. The onclose handler also
+    // does this, but stopPlayback closes the socket with
+    // desiredPlaybackRef=false (so onclose skips its reconnect
+    // branch); without an explicit cleanup here the timers could
+    // outlive the socket reference and fire against socketRef
+    // pointing at the *next* socket — false-positive watchdog
+    // closes during a brief PLAY→STOP→PLAY cycle.
+    if (audioSocketHeartbeatRef.current) {
+      clearInterval(audioSocketHeartbeatRef.current);
+      audioSocketHeartbeatRef.current = null;
+    }
+    if (audioSocketWatchdogRef.current) {
+      clearTimeout(audioSocketWatchdogRef.current);
+      audioSocketWatchdogRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/immutability
     desiredPlaybackRef.current = false;
+    writeDesiredPlayback(false);
     if (socketRef.current) {
       socketRef.current.close();
       socketRef.current = null;
@@ -1269,6 +1731,24 @@ export default function Home() {
         onError={onAudioError}
       />
 
+      {/* Background media-session keepalive. <video> with srcObject fed
+          from a combined MediaStream (2x2 canvas video track + silent
+          OscillatorNode audio track, attached in ensureAudioReady).
+          Both tracks active → strongest "active media" signal for
+          Chromium / Edge / iOS Safari, prevents the JS context +
+          WebSocket from being frozen when the screen is off. Muted +
+          autoplay + sr-only; no visible pixels, status-bar icon
+          minimal on iOS. */}
+      <video
+        ref={keepaliveVideoRef}
+        muted
+        loop
+        autoPlay
+        playsInline
+        aria-hidden="true"
+        className="sr-only"
+      />
+
       {/* Translucent right-side wall panel (toggleable, mutually exclusive with drawer) */}
       {messageFrontendVisible && (
       <MessageWallPanel
@@ -1297,6 +1777,41 @@ export default function Home() {
       {/* iOS Safari install nudge. Self-suppresses once dismissed or
           when the page is already running as an installed PWA. */}
       <IosInstallHint isPlaying={isPlaying} />
+
+      {/* In-app WebView (WeChat / QQ / generic wv) audio-loss nudge.
+          Renders on top of IosInstallHint (z-[61] vs z-[60]) because
+          the "open in browser" action is more urgent than PWA install
+          when the user is already trapped in a WebView. */}
+      <WebViewAudioHint isPlaying={isPlaying} />
+
+      {/* Mobile-only pill showing the current Wake Lock state
+          (active / failed / unsupported). Hidden on desktop and
+          when audio is not playing. Self-dismisses per device via
+          localStorage. */}
+      <WakeLockIndicator status={wakeLockStatus} isPlaying={isPlaying} />
+
+      {/* Re-prime failure toast: surfaces after the audio pause
+          re-prime has failed 3x within 5s. The onClick counts as a
+          real user gesture, which iOS requires for AudioContext
+          resume after Siri/FaceTime interruption, so this is the
+          cleanest way to recover. Auto-dismisses after 8s. */}
+      {reprimeToastVisible && (
+        <button
+          type="button"
+          onClick={() => {
+            audioRef.current?.play().catch(() => {});
+            setReprimeToastVisible(false);
+          }}
+          className="fixed bottom-[max(80px,calc(60px+env(safe-area-inset-bottom,0px)))]
+                     left-1/2 z-[65] -translate-x-1/2 cursor-pointer
+                     rounded-full border border-[rgba(140,160,255,0.3)]
+                     bg-[rgba(13,13,24,0.92)] px-4 py-2 text-sm
+                     backdrop-blur-[6px] text-[#e0e2ff] transition-opacity hover:opacity-90"
+          aria-label="音频被其他应用暂停，点此恢复"
+        >
+          音频被其他应用暂停，点此恢复
+        </button>
+      )}
     </div>
   );
 }

@@ -28,7 +28,7 @@ const securityHeaders = [
       "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
       "font-src 'self' data: https://fonts.gstatic.com",
       "img-src 'self' data: blob:",
-      "media-src 'self' blob:",
+      "media-src 'self' blob: data:",
       // ws:/wss: for the WebSocket fan-out server (page uses wss when
       // loaded over HTTPS, ws in plain HTTP dev). cloudflareinsights.com
       // is the beacon's reporting endpoint.

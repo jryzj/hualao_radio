@@ -163,3 +163,75 @@ export function parseUA(ua: string): ParsedUA {
 
   return { deviceType, deviceModel, deviceOs, deviceName, userName };
 }
+
+// --- Environment detection ----------------------------------------------
+// Separate from parseUA so existing callers (useRecordVisit, IosInstallHint,
+// WakeLockIndicator) keep their typed ParsedUA shape. Returns whether the
+// page is running inside an in-app WebView (where Wake Lock / MediaSession
+// are absent or unreliable and audio will not survive screen lock) and
+// whether it's already installed as a standalone PWA.
+//
+// `isStandalone` requires DOM access; callers must invoke this from a
+// client-only context (component effect), not during SSR.
+export type WebViewKind =
+  | "wechat"      // WeChat in-app (Tencent X5 / Blink)
+  | "qq"          // QQ in-app (Tencent X5 / Blink)
+  | "capacitor"   // Capacitor native shell
+  | "android-wv"  // Android generic WebView marker ("; wv)")
+  | "ios-wv";     // iOS WKWebView without Safari/ token
+
+export interface Environment {
+  isWebView: boolean;
+  webviewKind?: WebViewKind;
+  isStandalone: boolean;
+}
+
+export function parseEnvironment(): Environment {
+  if (typeof window === "undefined") {
+    return { isWebView: false, isStandalone: false };
+  }
+  const lower = (window.navigator.userAgent || "").toLowerCase();
+
+  // WebView detection. Order matters: WeChat / QQ / Capacitor all run on
+  // Tencent's X5 Blink in many cases, but each carries a distinctive
+  // marker. We test the most specific ones first.
+  let isWebView = false;
+  let webviewKind: WebViewKind | undefined;
+  if (/micromessenger/.test(lower)) {
+    isWebView = true;
+    webviewKind = "wechat";
+  } else if (/mqqbrowser|qq\//.test(lower)) {
+    isWebView = true;
+    webviewKind = "qq";
+  } else if (/capacitor/.test(lower)) {
+    isWebView = true;
+    webviewKind = "capacitor";
+  } else if (/;\s*wv\)/.test(lower)) {
+    // Android system WebView marker inserted between `;` and `)` when
+    // the host is an Android app shell (vs Chrome proper).
+    isWebView = true;
+    webviewKind = "android-wv";
+  } else {
+    // iOS WKWebView embedded by a native shell: AppleWebKit present but
+    // no Safari/, CriOS/, or FxiOS/ token (which a real Safari/Chrome/
+    // Firefox on iOS would include).
+    const isIOS = /ipad|iphone|ipod/.test(lower);
+    if (
+      isIOS &&
+      /applewebkit/.test(lower) &&
+      !/safari\//.test(lower) &&
+      !/crios\//.test(lower) &&
+      !/fxios\//.test(lower)
+    ) {
+      isWebView = true;
+      webviewKind = "ios-wv";
+    }
+  }
+
+  // Standalone PWA check (same logic as IosInstallHint.tsx).
+  const isStandalone =
+    window.matchMedia("(display-mode: standalone)").matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+  return { isWebView, webviewKind, isStandalone };
+}
