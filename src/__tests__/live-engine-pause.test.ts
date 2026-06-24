@@ -239,6 +239,66 @@ describe("reportClientPlaying(playing, clientId) per-client tracking", () => {
   });
 });
 
+describe("Bug #1 contract: client segment-end does not pause the engine", () => {
+  // Regression guard for the fix in src/app/page.tsx — onAudioEnded
+  // no longer POSTs playing=false on segment-to-segment transitions.
+  //
+  // The contract this pins: the page only reports playing=false on
+  // real stop signals (STOP button, pagehide, audio.onpause after
+  // 500ms debounce). Segment-to-segment transitions in continuous
+  // playback never empty the playingClients set; a fresh
+  // playing=true report from the same client restores the running
+  // state immediately. The engine itself is the source of truth for
+  // "the user stopped" — if the WS force-reconnect on visibility
+  // fires after a Doze-induced drop, the new connection will
+  // re-report playing=true, and the engine should resume.
+  //
+  // Without this contract, the original bug (HTML audio path runs
+  // segments back-to-back via playNext() and never re-POSTs
+  // playing=true) would empty playingClients between every segment,
+  // flip pauseCheck() to true, and the engine would pause
+  // permanently after the first segment.
+  it("playing=false → playing=true on the same client restores running state in one tick", () => {
+    const s = getEngineState();
+    s.liveEngineRunning = true;
+    s.shouldStop = false;
+    s.lastKnownOnline = 1;
+    liveEngine.reportClientPlaying(true, "A");
+    expect(liveEngine.pauseCheck()).toBe(false);
+
+    // Client signals a momentary gap (e.g. between HTML segments,
+    // or a transient buffer stall — engine SHOULD treat this as
+    // "still playing" if a playing=true arrives shortly after).
+    liveEngine.reportClientPlaying(false, "A");
+    expect(liveEngine.pauseCheck()).toBe(true);
+
+    // The next segment starts; the client re-reports playing=true.
+    // The set is repopulated and the engine resumes — without any
+    // need for the user to toggle PLAY manually.
+    liveEngine.reportClientPlaying(true, "A");
+    expect(liveEngine.pauseCheck()).toBe(false);
+  });
+
+  it("a second client's playing=true keeps the engine running through another client's gap", () => {
+    // Belt-and-suspenders: the per-client design already handles
+    // this (covered by the "CRITICAL: A stops while B is still
+    // playing" test above), but pin it under the Bug #1 framing
+    // because the original onAudioEnded bug also didn't account
+    // for multi-tab / multi-client scenarios.
+    const s = getEngineState();
+    s.liveEngineRunning = true;
+    s.shouldStop = false;
+    s.lastKnownOnline = 2;
+    liveEngine.reportClientPlaying(true, "A");
+    liveEngine.reportClientPlaying(true, "B");
+    liveEngine.reportClientPlaying(false, "A"); // A's segment gap
+    expect(liveEngine.pauseCheck()).toBe(false); // B still playing
+    liveEngine.reportClientPlaying(true, "A"); // A's next segment
+    liveEngine.reportClientPlaying(false, "B"); // B's segment gap
+    expect(liveEngine.pauseCheck()).toBe(false); // A still playing
+  });
+});
+
 describe("start() with paused initial state", () => {
   it("does not call submitOmniVoiceJob when paused (no listeners, no clients playing)", async () => {
     wsGetStatsMock.mockResolvedValue({ audioClients: 0, messageClients: 0, online: 0 });

@@ -241,6 +241,9 @@ httpServer.listen(HTTP_PORT, "127.0.0.1", () => {
 wss.on("connection", (ws, req) => {
   const url = new URL(req.url ?? "/", `http://localhost:${PORT}`);
   const path = url.pathname;
+  const remoteAddr = req.socket.remoteAddress ?? "?";
+  const remotePort = req.socket.remotePort ?? "?";
+  const connectedAt = Date.now();
 
   if (path === "/audio") {
     // Drain the replay buffer to the new client BEFORE adding it to
@@ -254,22 +257,32 @@ wss.on("connection", (ws, req) => {
     clientBuffering.set(ws, true);
     audioClients.add(ws);
     if (audioBuffer.length > 0) {
-      console.log(`[WS] /audio client connected, draining ${audioBuffer.length} chunks (max=${audioBufferMaxSize})`);
+      console.log(`[WS] /audio client connected from ${remoteAddr}:${remotePort}, draining ${audioBuffer.length} chunks (max=${audioBufferMaxSize})`);
       for (const chunk of audioBuffer) {
         if (ws.readyState === WebSocket.OPEN) {
           ws.send(chunk, { binary: true });
         }
       }
     } else {
-      console.log(`[WS] /audio client connected, empty replay buffer (max=${audioBufferMaxSize})`);
+      console.log(`[WS] /audio client connected from ${remoteAddr}:${remotePort}, empty replay buffer (max=${audioBufferMaxSize})`);
     }
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "replay_end" }));
     }
     clientBuffering.set(ws, false);
-    ws.on("close", () => {
+    ws.on("close", (code, reason) => {
+      const durationMs = Date.now() - connectedAt;
+      const reasonStr = reason?.toString() || "(empty)";
+      console.log(
+        `[WS] /audio client ${remoteAddr}:${remotePort} closed: ` +
+        `code=${code} reason="${reasonStr}" durationMs=${durationMs} ` +
+        `audioClients=${audioClients.size - 1}`,
+      );
       audioClients.delete(ws);
       clientBuffering.delete(ws);
+    });
+    ws.on("error", (err) => {
+      console.warn(`[WS] /audio client ${remoteAddr}:${remotePort} error:`, err.message);
     });
     // The audio path is server-push only. Clients are not allowed to
     // send binary frames back to the server for re-broadcast: any
@@ -278,11 +291,19 @@ wss.on("connection", (ws, req) => {
     // way audio reaches listeners is via the authenticated HTTP
     // /broadcast endpoint from the Next.js process.
   } else if (path === "/messages") {
-    console.log(`[WS] /messages client connected, total: ${messageClients.size + 1}`);
+    console.log(`[WS] /messages client connected from ${remoteAddr}:${remotePort}, total: ${messageClients.size + 1}`);
     messageClients.add(ws);
-    ws.on("close", () => {
-      console.log(`[WS] /messages client disconnected, total: ${messageClients.size - 1}`);
+    ws.on("close", (code, reason) => {
+      const durationMs = Date.now() - connectedAt;
+      console.log(
+        `[WS] /messages client ${remoteAddr}:${remotePort} closed: ` +
+        `code=${code} reason="${reason?.toString() || "(empty)"}" ` +
+        `durationMs=${durationMs} total: ${messageClients.size - 1}`,
+      );
       messageClients.delete(ws);
+    });
+    ws.on("error", (err) => {
+      console.warn(`[WS] /messages client ${remoteAddr}:${remotePort} error:`, err.message);
     });
   } else {
     ws.close();

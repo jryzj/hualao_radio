@@ -1503,22 +1503,22 @@ export default function Home() {
   }, []);
 
   // === Audio ended → next ===
+  // Bug #1 fix: this handler no longer POSTs playing=false. The
+  // HTML audio path runs segments back-to-back via playNext() and
+  // never re-POSTs playing=true between segments, so a playing=false
+  // here emptied the engine's playingClients set between every
+  // segment. pauseCheck() then flipped true and the engine paused
+  // permanently after the first segment. Real stop signals (STOP
+  // button, pagehide, audio.onpause after 500ms debounce) still
+  // POST playing=false via their own paths. The contract this fix
+  // locks in is verified by the "Bug #1 contract" describe block
+  // in src/__tests__/live-engine-pause.test.ts.
   const onAudioEnded = useCallback(() => {
     isPlayingRef.current = false;
     if (durationQueueRef.current.length > 0) durationQueueRef.current.shift();
     updateBufferStatus();
     playNext();
     fetch("/api/live/playback-complete", { method: "POST" }).catch(() => {});
-    // The ref flips here even though setIsPlaying(false) doesn't fire
-    // — the user intent is unchanged, but the practical effect is
-    // "no audio is playing right now". Report playing=false so the
-    // engine knows this client no longer has audio flowing; another
-    // client (different clientId) can keep the engine running.
-    fetch("/api/live/playing", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ playing: false, clientId: getOrCreateClientId() }),
-    }).catch(() => {});
   }, [playNext, updateBufferStatus]);
 
   const onAudioError = useCallback(() => {
