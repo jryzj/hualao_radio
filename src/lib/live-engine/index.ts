@@ -612,7 +612,7 @@ class LiveEngine {
       if (pendingSnapshot.length > 0) {
         // C-path: sync search using pending messages as query, overrides A cache
         try {
-          newsContext = await newsService.triggerCPathSync(messageContext);
+          newsContext = await newsService.triggerCPathSync(messageContext, theme.description);
         } catch (err) {
           console.error("[LiveEngine] news C-path failed:", err);
         }

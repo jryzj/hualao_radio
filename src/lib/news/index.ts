@@ -92,7 +92,16 @@ class NewsService {
   }
 
   // C-path: synchronous search triggered by listener messages.
-  async triggerCPathSync(messages: string): Promise<string> {
+  //
+  // `description` is the active theme's description. It is appended
+  // to the listener message so both FTS5 (local RSS pool) and Tavily
+  // (web fallback) search with a combined query:
+  //   "听众消息 美食新闻，美食文化，美食菜谱"
+  // The topic anchor measurably improves Tavily relevance for short,
+  // ambiguous listener inputs (e.g. "今天白斩鸡怎么样" — without the
+  // theme context, the result set is dominated by unrelated news).
+  // Empty description degrades cleanly to the message alone.
+  async triggerCPathSync(messages: string, description: string): Promise<string> {
     if (!messages.trim()) return "";
     const cfg = await getNewsConfig();
     const llm = await getLLMConfig();
@@ -100,7 +109,9 @@ class NewsService {
       console.warn("[NewsService] LLMConfig missing, C-path skip");
       return "";
     }
-    const results = await runSearch(messages, cfg);
+    const desc = description?.trim() ?? "";
+    const query = desc ? `${messages} ${desc}` : messages;
+    const results = await runSearch(query, cfg);
     const items = resultsToInputs(results);
     const context = formatNewsContext(items, {
       maxItems: cfg.maxNewsItems,
