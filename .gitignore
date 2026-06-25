@@ -163,7 +163,6 @@ prisma/*.db
 /src/app/ws-test/
 
 # Admin / debug-only routes (uncomment if the public repo shouldn't have them)
-/src/app/admin/
 /src/app/debug/
 
 # ─── Claude Code / agent state (per-machine) ────────────────────────────
