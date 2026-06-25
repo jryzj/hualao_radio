@@ -295,7 +295,14 @@ class LiveEngine {
         // wsBroadcast, so we don't introduce a load-order cycle.
         const mod = await import("@/lib/ws-server");
         const stats = await mod.wsGetStats();
-        online = stats?.online ?? 0;
+        // Prefer `audioOnline` (audio-only count). The legacy
+        // `online` field is the sum of audioClients + messageClients
+        // and would mask a /messages-only tab as "someone is
+        // listening", preventing the playingClients stale-cleanup
+        // below from ever firing. Fall back to `online` if a
+        // pre-existing ws-server doesn't yet emit `audioOnline`
+        // (deployment that hasn't restarted yet).
+        online = stats?.audioOnline ?? stats?.online ?? 0;
       } catch {
         // ws-server may be down; treat as "no listeners" and stay
         // paused. Don't crash the poller — the next tick will retry.

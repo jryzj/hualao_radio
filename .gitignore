@@ -1,6 +1,6 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
-# dependencies
+# ─── Dependencies ────────────────────────────────────────────────────────
 /node_modules
 /.pnp
 .pnp.*
@@ -10,98 +10,226 @@
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# ─── Testing ────────────────────────────────────────────────────────────
 /coverage
+/.nyc_output
+*.lcov
+junit.xml
+/test-results/
+/playwright-report/
+/playwright/.cache/
 
-# next.js
+# ─── Next.js / build outputs ────────────────────────────────────────────
 /.next/
 /out/
-/.swc
-
-# production
 /build
+/.swc
+/dist/
 
-# misc
+# ─── OS / editor scratch ────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
-*.pem
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
 
-# debug / logs
+# Editor session / undo files
+*.swp
+*.swo
+*~
+*.bak
+*.orig
+*.rej
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.netrwhist
+
+# ─── Logs / runtime captures ────────────────────────────────────────────
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 *.log
 *.pid
+*.pid.lock
+*.seed
+*.pid.bak
+logs/
+pids/
 
-# env files — all variants ignored; .env.example is committed as a template
+# Local server process output captures
+.server-err.txt
+.server-out.txt
+.server-err.log
+.server-out.log
+
+# Profiling / heap / network captures
+*.cpuprofile
+*.heapsnapshot
+*.heapsnap
+*.trace
+*.pcap
+*.har
+*.pcapng
+
+# ─── Env / secrets / credentials ────────────────────────────────────────
+# All env variants ignored; .env.example is committed as a template.
 .env*
 !.env.example
+.envrc
+.env.*.local
 
-# vercel
-.vercel
+# TLS / private keys / certs (everything in /certificates/ is
+# private; *.pem/.key/.crt cover stray files at the repo root).
+/certificates/
+*.pem
+*.key
+*.crt
+*.cer
+*.p12
+*.pfx
+*.jks
+*.keystore
+cookies.txt
+*.ntlm
+.npmrc.local
 
-# typescript
+# Cloud / deployment credentials (commonly leaked in commits)
+.aws/
+.gcp/
+.azure/
+.gcloud/
+.service-account*.json
+*-credentials.json
+gha-creds-*.json
+
+# ─── TypeScript / SWC / framework caches ────────────────────────────────
 *.tsbuildinfo
 next-env.d.ts
+.turbo/
+.cache/
+.tmp/
+/tmp/
+/temp/
 
-# Prisma client output (regenerated from schema)
+# ─── Prisma ──────────────────────────────────────────────────────────────
+# Generated client (regenerated from schema)
 /src/generated/prisma
 
 # Local SQLite databases — dev.db at the repo root is the live one used
 # by `prisma`. The src/dev.db copy is a stray. Keep neither in git.
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
+*.db-shm
+*.db-wal
 /src/dev.db
+prisma/dev.db
+prisma/*.db
 
-# uploaded reference audio (admin workflow uploads)
+# ─── Uploaded / runtime user content ────────────────────────────────────
+# Admin uploads
 /public/uploads/
 
-# TTS voice-clone reference samples (proprietary voice data, kept locally)
+# TTS voice-clone reference samples (proprietary voice data)
 /workflows/*.flac
 /workflows/*.mp3
 /workflows/*.wav
 /workflows/*.ogg
 /workflows/*.m4a
+/workflows/*.aac
+/workflows/*.opus
 
-# Internal-only project documents (not for the public repo)
+# Generated audio / TTS caches (if added later)
+/public/audio-cache/
+/public/tts-cache/
+.cache/audio/
+
+# ─── Internal-only project documents (not for the public repo) ──────────
 /PRD.md
 /PRD-live-engine.md
 /omnivoice-tts-ComfyUI.md
 /AGENTS.md
 /CLAUDE.md
+/NOTES.md
+/HACKING.md
+/INTERNAL.md
 
-# WebSocket manual-test page route
+# ─── Routes / pages that shouldn't ship in the public repo ───────────────
+# WebSocket manual-test page (dev-only)
 /src/app/ws-test/
 
-# Claude Code local-only state (per-machine settings, task scratch files)
+# Admin / debug-only routes (uncomment if the public repo shouldn't have them)
+/src/app/admin/
+/src/app/debug/
+
+# ─── Claude Code / agent state (per-machine) ────────────────────────────
 /.claude/settings.local.json
 **/settings.local.json
+/.claude/projects/
+/.claude/sessions/
+.claude-sessions/
 
-# Playwright MCP test artifacts (logs, page snapshots, screenshots)
+# ─── Playwright / browser automation artifacts ──────────────────────────
 /.playwright-mcp/
+/playwright-report/
+/playwright/.cache/
 
-# Server process output captures (set by some dev launchers)
-.server-err.txt
-.server-out.txt
-
-# Editor / IDE workspace state
-/.vscode/
-/.idea/
-
-# Build / cache dirs (created by Next 15 / Turbopack / various tooling)
-/dist/
-/.turbo/
-/.cache/
-/tmp/
-/temp/
-
-# SQLite WAL and shared-memory files (companions to dev.db)
-*.db-shm
-*.db-wal
-
-# Script-generated screenshots and visual test artifacts
+# ─── Visual / screenshot artifacts ──────────────────────────────────────
 /scripts/*.png
+/screenshots/
+/test-snapshots/
+*.snap
 
+# ─── Backup / archive (don't commit zips/tars of the source) ───────────
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.rar
+*.7z
+backup/
+backups/
+archive/
+/dumps/
+/data/
+
+# ─── OS / runtime data caches ──────────────────────────────────────────
+.eslintcache
+.parcel-cache/
+.cache-loader/
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+.node_repl_history
+*.tgz
+
+# ─── Storybook (if added later) ────────────────────────────────────────
+/storybook-static/
+
+# Source maps from production builds (keep .map locally for debugging;
+# don't ship to public repo)
+/public/**/*.map
+
+# ─── Patch / diff files (often ad-hoc local changes) ───────────────────
+*.diff
+*.patch
+*.orig
+
+# ─── Local-only override / config files ────────────────────────────────
+*.local.json
+*.local.yaml
+*.local.yml
+*.local.toml
+*.override.json
+/config/local/
+/config/prod/
+
+# Already in HEAD's previous commit
 cookies.txt
+
+/src/__tests__/

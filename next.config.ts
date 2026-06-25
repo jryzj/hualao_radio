@@ -85,6 +85,24 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // PWA / favicon assets get an explicit Cache-Control so
+        // browsers stop spamming the network with 304 revalidations
+        // on every cache lookup. Without this, the dev server's
+        // default `Cache-Control: public, max-age=0` makes the
+        // browser re-check the icons on every interaction, which
+        // shows up in DevTools Network as a near-continuous
+        // /icons/icon-{192,512}.png request stream even though no
+        // code is fetching them. 1 hour is a compromise — long
+        // enough to kill the revalidation storm, short enough that
+        // an icon update propagates within an hour. Bump the URL
+        // (e.g. add `?v=2` in the manifest) to force an instant
+        // refresh after a real icon change.
+        source: "/icons/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=3600, must-revalidate" },
+        ],
+      },
+      {
         source: "/:path*",
         headers: securityHeaders,
       },

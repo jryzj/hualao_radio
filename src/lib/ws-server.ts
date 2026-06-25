@@ -68,14 +68,24 @@ export async function wsBroadcastMessage(
 }
 
 // Read-only stats from the ws-server: live client counts on each WS
-// path, plus a precomputed `online` total. Used by the admin visitors
-// page to display the current online user count. Returns null when the
-// ws-server is unreachable (not started, network down) so the admin
-// UI can degrade gracefully instead of crashing the page render.
+// path, plus precomputed `online` (total) and `audioOnline`
+// (audio-only) totals. Used by the admin visitors page to display the
+// current online user count, AND by the LiveEngine's 5s poller to
+// decide whether to keep generating audio. The engine reads
+// `audioOnline` so a /messages-only tab (admin preview, chat viewer)
+// doesn't keep audio generation running for zero listeners. Returns
+// null when the ws-server is unreachable (not started, network down)
+// so the admin UI can degrade gracefully instead of crashing the
+// page render.
 export interface WsStats {
   audioClients: number;
   messageClients: number;
   online: number;
+  // Audio-only count. ws-server (post-fix) emits this; older
+  // ws-server deployments may omit it, in which case the engine
+  // falls back to `online`. We surface it as optional in the type
+  // so a partially-rolled-out deployment doesn't break compilation.
+  audioOnline?: number;
 }
 
 export async function wsGetStats(): Promise<WsStats | null> {
@@ -93,6 +103,7 @@ export async function wsGetStats(): Promise<WsStats | null> {
       audioClients: data.audioClients ?? 0,
       messageClients: data.messageClients ?? 0,
       online: data.online ?? 0,
+      audioOnline: data.audioOnline,
     };
   } catch (err) {
     // ws-server is optional; if it isn't running the admin dashboard

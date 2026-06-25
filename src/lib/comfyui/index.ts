@@ -209,7 +209,22 @@ async function broadcastAudioNode(
         if (L2 !== null) {
           recordGenerationSurplus(L1, L2);
         } else {
-          console.warn('[comfyui] could not parse WAV duration from segment; skipping surplus update');
+          // Include the actual audioFormat (offset 20 in the WAV
+          // header) and buffer length so we can tell at a glance
+          // whether we're hitting IEEE-float (3), extensible
+          // (0xFFFE), A-law (6), μ-law (7), or a truncated buffer.
+          // parseWavDurationMs only supports PCM (1) and IEEE
+          // float (3) — anything else lands here.
+          const audioFormat = audioBuffer.length >= 22
+            ? audioBuffer.readUInt16LE(20)
+            : -1;
+          const riff = audioBuffer.subarray(0, 4).toString("ascii");
+          const wave = audioBuffer.subarray(8, 12).toString("ascii");
+          console.warn(
+            `[comfyui] could not parse WAV duration from segment; ` +
+            `skipping surplus update (riff="${riff}" wave="${wave}" ` +
+            `audioFormat=${audioFormat} bytes=${audioBuffer.length})`,
+          );
         }
       }
       const base64 = audioBuffer.toString('base64');

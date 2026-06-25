@@ -215,12 +215,21 @@ const httpServer = http.createServer((req, res) => {
     // sometimes admin-only viewers of the message stream). The admin
     // page sums them; we just return the raw counts so the API is
     // self-explanatory and a future caller can decide differently.
+    //
+    // `audioOnline` is the audio-only count (== audioClients here, but
+    // named for symmetry with the engine's reading of it). The
+    // LiveEngine's 5s poller uses `audioOnline` for `pauseCheck()`:
+    // a /messages-only tab (admin preview, chat-only viewer) must NOT
+    // keep the engine generating audio for zero listeners. We also
+    // expose `online` (the sum) for the admin page that wants the
+    // total picture.
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(
       JSON.stringify({
         audioClients: audioClients.size,
         messageClients: messageClients.size,
         online: audioClients.size + messageClients.size,
+        audioOnline: audioClients.size,
       }),
     );
   } else {

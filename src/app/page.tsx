@@ -283,6 +283,28 @@ export default function Home() {
   const currentUrlRef = useRef<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const audioPrimedRef = useRef(false);
+  // Last MediaMetadata we assigned to navigator.mediaSession.metadata.
+  // The MediaSession effect re-runs on `[theme, hasEntered]`, and
+  // Chromium-class browsers re-fetch the artwork URLs on every
+  // assignment — even when the underlying values are identical. We
+  // compare against this ref and skip the assignment when nothing
+  // has changed, which stops the /icons/icon-{192,512}.png
+  // request storm in DevTools Network. Content equality is
+  // sufficient because the artwork URLs are static in this app.
+  const lastMediaMetaRef = useRef<{ title: string; artist: string; album: string } | null>(null);
+  // Dedup window for WS-reconnect replays. ws-server's new-connection
+  // handler drains the last N=audioBufferMaxSize chunks to every
+  // reconnecting client (ws-server/index.ts:266-281). When the audio
+  // WS drops (Doze, lock screen, network blip) and reconnects, the
+  // client gets a fresh copy of chunks it just played. The Set here
+  // catches those exact-byte duplicates; the dedup guard at the top
+  // of enqueueAudioBuffer rejects them before any decode/push work.
+  // Capped at 16 entries — covers a generous prebuffer + a couple
+  // of segments of headroom. Cleared on stopPlayback() and on the
+  // flush JSON message (engine STOP or theme change), so legitimate
+  // replays after a manual reset still queue.
+  const recentChunkHashesRef = useRef<Set<string>>(new Set());
+  const RECENT_HASH_CAP = 16;
   // Audio WebSocket reconnect (Fix #6) — iOS Safari suspends WS in the
   // background and may not surface the close. We mirror the message-WS
   // retry loop (see below) so a transient drop (ws-server restart, idle
@@ -768,10 +790,23 @@ export default function Home() {
     const updateMetadata = () => {
       const hostName = theme?.persona?.name ?? "AI";
       const title = theme?.name ? `RADIO AI · ${theme.name}` : "RADIO AI";
+      const artist = `Host: ${hostName}`;
+      const album = "Live Broadcast";
+      // Skip the assignment when nothing has changed. Chromium-class
+      // browsers re-fetch every artwork URL on each
+      // `navigator.mediaSession.metadata = ...` call, even when the
+      // new MediaMetadata is content-equal to the existing one.
+      // Comparing text fields is enough because the artwork URLs
+      // are static in this app.
+      const last = lastMediaMetaRef.current;
+      if (last && last.title === title && last.artist === artist && last.album === album) {
+        return;
+      }
+      lastMediaMetaRef.current = { title, artist, album };
       navigator.mediaSession!.metadata = new MediaMetadata({
         title,
-        artist: `Host: ${hostName}`,
-        album: "Live Broadcast",
+        artist,
+        album,
         // Lock-screen / control-center artwork. Reuses the PWA icons;
         // browsers ignore missing images and the audio still plays.
         artwork: [
@@ -1135,8 +1170,42 @@ export default function Home() {
     });
   }, []);
 
+  // djb2 hash of the first 4KB, mixed with byteLength. Used to
+  // detect exact-byte duplicates in the WS stream — primarily
+  // catches the ws-server replay-buffer drain on reconnect. Kept
+  // outside the component so it doesn't capture any closures.
+  // Collision probability per distinct chunk: ~1 in 4 billion
+  // (32-bit djb2 + byteLength); safe for an audio stream where
+  // chunks are unique by construction.
+  const hashChunk = (buf: ArrayBuffer): string => {
+    const sampleLen = Math.min(4096, buf.byteLength);
+    const view = new Uint8Array(buf, 0, sampleLen);
+    let h = 5381;
+    for (let i = 0; i < sampleLen; i++) {
+      h = ((h << 5) + h + view[i]) | 0;
+    }
+    return h.toString(36) + ":" + buf.byteLength;
+  };
+
   const enqueueAudioBuffer = useCallback((buffer: ArrayBuffer) => {
     if (!desiredPlaybackRef.current || buffer.byteLength === 0 || !audioRef.current) return;
+    // WS-reconnect dedup: reject chunks the client just played.
+    // Catches the case where ws-server drains the replay buffer
+    // (ws-server/index.ts:266-281) to a reconnecting client.
+    // Hashing happens before any decode/push work so a duplicate
+    // never costs CPU. The set is bounded (RECENT_HASH_CAP); on
+    // stopPlayback/flush the set is cleared so legitimate replays
+    // after a manual reset still queue.
+    const dedupSet = recentChunkHashesRef.current;
+    const hash = hashChunk(buffer);
+    if (dedupSet.has(hash)) {
+      return;
+    }
+    dedupSet.add(hash);
+    if (dedupSet.size > RECENT_HASH_CAP) {
+      const oldest = dedupSet.values().next().value;
+      if (oldest !== undefined) dedupSet.delete(oldest);
+    }
     const ctx = audioCtxRef.current;
 
     const afterQueued = () => {
@@ -1322,6 +1391,10 @@ export default function Home() {
           audioQueueRef.current = [];
           decodedQueueRef.current = [];
           durationQueueRef.current = [];
+          // Flush resets the dedup window — any subsequent audio
+          // (e.g. after engine restart on a new theme) is treated as
+          // fresh and not skipped.
+          recentChunkHashesRef.current.clear();
           isPlayingRef.current = false;
           hasStartedRef.current = false;
           setQueueLength(0);
@@ -1426,6 +1499,9 @@ export default function Home() {
     audioQueueRef.current = [];
     decodedQueueRef.current = [];
     durationQueueRef.current = [];
+    // Reset dedup window so the next PLAY→STOP→PLAY cycle doesn't
+    // skip the first chunks of the resumed stream.
+    recentChunkHashesRef.current.clear();
     hasStartedRef.current = false;
     isPlayingRef.current = false;
     setQueueLength(0);
