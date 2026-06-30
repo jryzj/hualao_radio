@@ -10,7 +10,18 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
   }
   if ("historyRounds" in body) data.historyRounds = body.historyRounds;
   if ("isActive" in body) data.isActive = body.isActive;
-  const theme = await withBusyRetry(() => prisma.theme.update({ where: { id }, data }));
+  const theme = await withBusyRetry(() => {
+    if (data.isActive === true) {
+      return prisma.$transaction(async (tx) => {
+        await tx.theme.updateMany({
+          where: { id: { not: id }, isActive: true },
+          data: { isActive: false },
+        });
+        return tx.theme.update({ where: { id }, data });
+      });
+    }
+    return prisma.theme.update({ where: { id }, data });
+  });
   return NextResponse.json(theme);
 }
 

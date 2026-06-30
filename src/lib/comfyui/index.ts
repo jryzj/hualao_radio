@@ -6,7 +6,7 @@ import fs from "fs";
 import path from "path";
 
 // Global state to check if we should stop polling
-const globalState = globalThis as unknown as { shouldStop?: boolean };
+const globalState = globalThis as unknown as { shouldStop?: boolean; generationSurplusMs?: number };
 
 function comfyHeaders(token: string): Record<string, string> {
   return token
@@ -208,6 +208,8 @@ async function broadcastAudioNode(
         const L2 = parseWavDurationMs(audioBuffer);
         if (L2 !== null) {
           recordGenerationSurplus(L1, L2);
+          // [TEMP DEBUG] 看 d 实际值，确认 buffer 上限 = A / d 的假设
+          console.log(`[comfyui] TTS unit: L1=${L1}ms L2=${L2}ms d=${L2 - L1}ms D=${globalState.generationSurplusMs}ms`);
         } else {
           // Include the actual audioFormat (offset 20 in the WAV
           // header) and buffer length so we can tell at a glance

@@ -102,18 +102,36 @@ export function consumeGenerationSurplusPause(A: number): Promise<void> {
     globalState.generationSurplusMs = 0;
     return Promise.resolve();
   }
-  const D = globalState.generationSurplusMs;
-  if (D <= A) return Promise.resolve();
-  const wait = Math.max(0, D - A / 2);
-  console.log(
-    `[LiveEngine] generation surplus ${Math.round(D)}ms > threshold ${A}ms, pausing ${Math.round(wait)}ms`,
-  );
-  // Keep A/2 as headroom for the next segment instead of clearing to
-  // 0. The math: a fresh segment adds d to D (going A/2 → A/2 + d),
-  // sleep drains it back to A/2. So per-segment sleep converges to d,
-  // making the server cycle (L1 + d) equal the client cycle (L2).
-  globalState.generationSurplusMs = A / 2;
-  return new Promise((r) => setTimeout(r, wait));
+
+  // Polling loop: check D, sleep if > A, reset D to 0, repeat.
+  //
+  // Each iteration: D holds the cumulative (L2 − L1) of every TTS
+  // unit that has completed since the last reset. We sleep for
+  // (D − A/2) ms, then reset D to 0 so the next iteration only
+  // measures what happens during THIS sleep. After the sleep we
+  // re-check: if D is still > A (TTS pipeline produced enough during
+  // the sleep to push us back over the threshold), sleep again with
+  // a fresh D=0. Otherwise we return and the LLM call proceeds.
+  //
+  // Convergence: the TTS pipeline is finite (gated by `isGeneratingLLM`
+  // upstream of LLM calls), so eventually TTS completions stop adding
+  // to D, the loop sees D <= A, and we exit.
+  return new Promise<void>((resolve) => {
+    const checkAndSleep = () => {
+      const D = globalState.generationSurplusMs;
+      if (D <= A) {
+        resolve();
+        return;
+      }
+      const wait = Math.max(0, D - A / 2);
+      console.log(
+        `[LiveEngine] generation surplus ${Math.round(D)}ms > threshold ${A}ms, pausing ${Math.round(wait)}ms`,
+      );
+      globalState.generationSurplusMs = A / 2;
+      setTimeout(checkAndSleep, wait);
+    };
+    checkAndSleep();
+  });
 }
 
 // Reset hook used by the engine's stop()/flush path and by tests.
