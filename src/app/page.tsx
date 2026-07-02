@@ -305,6 +305,102 @@ export default function Home() {
   // replays after a manual reset still queue.
   const recentChunkHashesRef = useRef<Set<string>>(new Set());
   const RECENT_HASH_CAP = 16;
+  // P0-2: persist the dedup window to sessionStorage so it survives
+  // a page refresh / tab reload / OS-process-kill-recover cycle. In
+  // those scenarios the in-memory Set is empty (it's a useRef, lives
+  // only as long as the React component does), so before this change
+  // every reconnect had an empty dedup set and the server's replay
+  // buffer drained straight into the playback queue — the
+  // "just-heard-sentences-played-again" symptom.
+  //
+  // We persist:
+  //   - On every `add` (debounced 500ms via persistDedup below)
+  //   - On clear (stopPlayback, flush message) via clearPersistedDedup
+  //
+  // We do NOT persist across an explicit user STOP+PLAY cycle unless
+  // `clearPersistedDedup` is called by stopPlayback — that preserves
+  // the "fresh playback, no pre-suppression" semantics the existing
+  // in-memory clear provides. Private-mode browsers may not have
+  // sessionStorage; all writes/reads are wrapped in try/catch and
+  // silently fall back to the in-memory-only behavior.
+  //
+  // Storage key is namespaced ("radioai-audio-dedup-v1") and versioned
+  // — bump v1 → v2 if the hash format changes (e.g., switching off
+  // djb2-4KB to a stronger hash) to invalidate stale entries.
+  const DEDUP_STORAGE_KEY = "radioai-audio-dedup-v1";
+  const dedupPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistDedup = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (dedupPersistTimerRef.current) return; // already pending
+    dedupPersistTimerRef.current = setTimeout(() => {
+      dedupPersistTimerRef.current = null;
+      try {
+        const arr = Array.from(recentChunkHashesRef.current);
+        sessionStorage.setItem(DEDUP_STORAGE_KEY, JSON.stringify(arr));
+      } catch {
+        /* sessionStorage may be unavailable (private mode, quota) */
+      }
+    }, 500);
+  }, []);
+  const clearPersistedDedup = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (dedupPersistTimerRef.current) {
+      clearTimeout(dedupPersistTimerRef.current);
+      dedupPersistTimerRef.current = null;
+    }
+    try {
+      sessionStorage.removeItem(DEDUP_STORAGE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  // Load persisted dedup state once on mount. Runs before any
+  // enqueueAudioBuffer call (enqueueAudioBuffer is invoked from
+  // socket.onmessage, which can't fire until connectAudioSocket has
+  // been called, which only happens after the autostart effect —
+  // all well after this mount effect).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = sessionStorage.getItem(DEDUP_STORAGE_KEY);
+      if (!raw) return;
+      const arr = JSON.parse(raw);
+      if (!Array.isArray(arr)) return;
+      const set = recentChunkHashesRef.current;
+      let added = 0;
+      for (const h of arr) {
+        if (typeof h === "string" && !set.has(h) && added < RECENT_HASH_CAP) {
+          set.add(h);
+          added++;
+        }
+      }
+    } catch {
+      /* corrupted / unavailable storage — ignore */
+    }
+  }, []);
+  // P0-3: re-prime cooldown lock. Several handlers
+  // (visibilitychange, pageshow, audio.onpause) all call
+  // audio.play() to recover from transient OS-induced pauses.
+  // iOS Safari / Android Chrome often fire these back-to-back in the
+  // same visibility / focus event — without a cooldown, the same
+  // intent produces multiple audio.play() calls racing against each
+  // other (and against an in-flight playNext()). The first call
+  // usually wins; the rest are wasted work at best and can re-enter
+  // the playNext → enqueueAudioBuffer chain at worst.
+  //
+  // 500ms is short enough that real inter-app transitions (phone
+  // call ends → audio resumes) feel instant, and long enough to
+  // swallow same-tick bursts. NOT used by the cold-start recovery
+  // path in onPageShow — that path calls startPlayback() (a fresh
+  // initialization), not a re-prime.
+  const lastReprimeAtRef = useRef(0);
+  const REPRIME_COOLDOWN_MS = 500;
+  const tryReprime = () => {
+    const now = Date.now();
+    if (now - lastReprimeAtRef.current < REPRIME_COOLDOWN_MS) return false;
+    lastReprimeAtRef.current = now;
+    return true;
+  };
   // Audio WebSocket reconnect (Fix #6) — iOS Safari suspends WS in the
   // background and may not surface the close. We mirror the message-WS
   // retry loop (see below) so a transient drop (ws-server restart, idle
@@ -970,7 +1066,9 @@ export default function Home() {
       if (!a) return;
       // If we believe we should be playing but the audio got paused
       // (e.g. by the OS while the page was hidden), kick it back on.
-      if (isPlaying && a.paused) {
+      // P0-3: gated by tryReprime cooldown so a same-tick
+      // visibility+pageshow double-fire only triggers one play().
+      if (isPlaying && a.paused && tryReprime()) {
         a.play().catch(() => {});
       }
     };
@@ -992,7 +1090,9 @@ export default function Home() {
       }
       const a = audioRef.current;
       if (!a) return;
-      if (isPlaying && a.paused) {
+      // P0-3: gated by tryReprime cooldown (shared with
+      // visibilitychange above — see plan).
+      if (isPlaying && a.paused && tryReprime()) {
         a.play().catch(() => {});
       }
     };
@@ -1035,6 +1135,12 @@ export default function Home() {
       ) {
         return;
       }
+      // P0-3: gated by tryReprime cooldown (shared with
+      // visibilitychange/pageshow handlers above). Without this,
+      // a flaky network can produce a burst of pause events each
+      // of which would trigger its own audio.play() — wasted work
+      // and possibly visible as audio stutter.
+      if (!tryReprime()) return;
       audio.play().catch(() => {
         const now = Date.now();
         failureTimestamps = failureTimestamps.filter((t) => now - t < 5000);
@@ -1195,7 +1301,9 @@ export default function Home() {
     // Hashing happens before any decode/push work so a duplicate
     // never costs CPU. The set is bounded (RECENT_HASH_CAP); on
     // stopPlayback/flush the set is cleared so legitimate replays
-    // after a manual reset still queue.
+    // after a manual reset still queue. P0-2 also persists the
+    // hashes to sessionStorage (debounced) so a page refresh doesn't
+    // wipe the dedup window.
     const dedupSet = recentChunkHashesRef.current;
     const hash = hashChunk(buffer);
     if (dedupSet.has(hash)) {
@@ -1206,6 +1314,12 @@ export default function Home() {
       const oldest = dedupSet.values().next().value;
       if (oldest !== undefined) dedupSet.delete(oldest);
     }
+    // Schedule a debounced write to sessionStorage. Coalescing
+    // matters because chunks can arrive back-to-back during a
+    // prebuffer drain (3-30 adds in a few ms) and we only need the
+    // final state. Defer to a microtask-ish timeout. Errors
+    // (private mode, quota) are swallowed inside persistDedup.
+    persistDedup();
     const ctx = audioCtxRef.current;
 
     const afterQueued = () => {
@@ -1256,7 +1370,7 @@ export default function Home() {
         afterQueued();
       })
       .catch(enqueueHtmlAudio);
-  }, [checkBufferReady, playNext, probeAudioDuration, updateBufferStatus]);
+  }, [checkBufferReady, persistDedup, playNext, probeAudioDuration, updateBufferStatus]);
 
   // === Connect audio WS ===
   //
@@ -1272,6 +1386,39 @@ export default function Home() {
   // rule is satisfied without resorting to ignore comments.
   const connectAudioSocket = useCallback((themeId: string) => {
     if (typeof window === "undefined") return;
+    // Idempotency guard: close any existing socket before opening a
+    // new one. Without this, two call sites can race and produce
+    // dual /audio sockets that each drain the server's replay
+    // buffer (and compete for live broadcasts). The server has no
+    // way to distinguish a "reconnect" from a "fresh" client, so the
+    // duplicate drain is the only protection against double-play.
+    // Sources of the race:
+    //   - socket.onclose schedules a setTimeout-reconnect (1→15s)
+    //     and concurrently the visibilitychange force-reconnect
+    //     (page.tsx below) runs while the socket is in CLOSING.
+    //   - startPlayback() may be invoked from both the autostart
+    //     effect and the pageshow cold-start recovery in the same
+    //     tick.
+    // Closing the existing socket first ensures we never have more
+    // than one /audio connection per browser tab. Repeating
+    // .close() on an already-CLOSED socket is a no-op so this is
+    // also safe to call when nothing useful is open.
+    const existing = socketRef.current;
+    if (existing && existing.readyState <= WebSocket.OPEN) {
+      try {
+        existing.close();
+      } catch {
+        /* socket may have already errored; ignore */
+      }
+      // Drop any pending retry timer so the OLD socket's onclose
+      // doesn't fire after we've moved on and create yet another
+      // socket a few hundred ms later.
+      if (audioSocketRetryRef.current) {
+        clearTimeout(audioSocketRetryRef.current);
+        audioSocketRetryRef.current = null;
+      }
+    }
+    socketRef.current = null;
     // Same base as the message socket — see the comment there about
     // NEXT_PUBLIC_WS_URL.
     const wsUrl = `${wsBaseUrl()}/audio?themeId=${themeId}`;
@@ -1393,8 +1540,10 @@ export default function Home() {
           durationQueueRef.current = [];
           // Flush resets the dedup window — any subsequent audio
           // (e.g. after engine restart on a new theme) is treated as
-          // fresh and not skipped.
+          // fresh and not skipped. P0-2: also wipe the sessionStorage
+          // copy so the next session doesn't carry stale hashes.
           recentChunkHashesRef.current.clear();
+          clearPersistedDedup();
           isPlayingRef.current = false;
           hasStartedRef.current = false;
           setQueueLength(0);
@@ -1412,7 +1561,7 @@ export default function Home() {
         readBlobAsArrayBuffer(e.data).then(enqueueAudioBuffer).catch(() => {});
       }
     };
-  }, [enqueueAudioBuffer, updateBufferStatus]);
+  }, [clearPersistedDedup, enqueueAudioBuffer, updateBufferStatus]);
 
   // Keep connectAudioSocketRef populated as the callback's identity
   // changes. Mirrors the playNextRef / startPlaybackRef pattern.
@@ -1500,8 +1649,11 @@ export default function Home() {
     decodedQueueRef.current = [];
     durationQueueRef.current = [];
     // Reset dedup window so the next PLAY→STOP→PLAY cycle doesn't
-    // skip the first chunks of the resumed stream.
+    // skip the first chunks of the resumed stream. P0-2: also wipe
+    // the sessionStorage copy — the user pressed STOP, so they
+    // expect a fresh playback on next PLAY.
     recentChunkHashesRef.current.clear();
+    clearPersistedDedup();
     hasStartedRef.current = false;
     isPlayingRef.current = false;
     setQueueLength(0);
@@ -1517,7 +1669,7 @@ export default function Home() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ playing: false, clientId: getOrCreateClientId() }),
     }).catch(() => {});
-  }, [updateBufferStatus]);
+  }, [clearPersistedDedup, updateBufferStatus]);
 
   const togglePlay = useCallback(() => {
     if (isPlaying) stopPlayback();
